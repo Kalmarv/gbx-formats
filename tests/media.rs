@@ -284,6 +284,18 @@ fn fx_blur_motion() {
     });
 }
 #[test]
+fn trails() {
+    let mut b = Vec::new();
+    words(&mut b, &[0x030A9000]);
+    floats(&mut b, &[1.0, 2.0]);
+    words(&mut b, &[0xFACA_DE01]);
+    check(0x030A9000, &b, &[0x030A9000], |node| {
+        let n: &MediaBlockTrails = node.try_into().unwrap();
+        assert_eq!(n.start, Some(1.0));
+        assert_eq!(n.end, Some(2.0));
+    });
+}
+#[test]
 fn camera_path() {
     let mut b = Vec::new();
     words(&mut b, &[0x030A1002, 1]);

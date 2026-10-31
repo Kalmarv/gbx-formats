@@ -1,7 +1,8 @@
-//! Reads every TrackMania Nations Forever map of the corpus (`corpus/tmnf/tmx-2026-top`, the GAME_DATA oracle root's)
-//! and compares it with what GBX.NET 2.5.0, a third-party reader, read from the same file
-//! (`gbxnet/tmnf/tmx-2026-top`): the container, the decompressed body (GBX.NET.LZO's), the main node's chunk ids,
-//! each class's chunk census, and the map's fields and blocks. A map GBX.NET could not read is reported, not compared.
+//! Reads every TrackMania Nations Forever map of each corpus (`corpus/tmnf/<name>` of the GAME_DATA oracle root:
+//! tmx-2026-top, tmx-alltime-top, tmx-newest, tmnf-stock) and compares it with what GBX.NET 2.5.0, a third-party
+//! reader, read from the same file (`gbxnet/tmnf/<name>`): the container, the decompressed body (GBX.NET.LZO's), the
+//! main node's chunk ids, each class's chunk census, and the map's fields and blocks. A map GBX.NET could not read is
+//! reported, not compared.
 #![allow(
     clippy::unwrap_used,
     reason = "a test reading the files you point it at; the library does no I/O"
@@ -16,7 +17,7 @@ use gbx_formats::{Gbx, Id, Ident, Nodes};
 use inputs::{Game, OracleSet, oracle};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn id(i: &Id) -> Value {
     match i {
@@ -102,7 +103,24 @@ fn compare(path: &Path, want: &Value, decompressed: &Path, failures: &mut Vec<St
     let body = gbx.body().map_err(|e| format!("body: {e}"))?;
     let mut check = |what: &str, ours: Value, theirs: &Value| {
         if ours != *theirs {
-            let (o, t) = (ours.to_string(), theirs.to_string());
+            let (o, t) = match (ours.as_object(), theirs.as_object()) {
+                // a census: only the entries that differ
+                (Some(a), Some(b)) => {
+                    let keys: std::collections::BTreeSet<_> = a.keys().chain(b.keys()).collect();
+                    let differ =
+                        |m: &serde_json::Map<String, Value>, k: &String| m.get(k).map(Value::to_string);
+                    let diff = |m: &serde_json::Map<String, Value>,
+                                other: &serde_json::Map<String, Value>| {
+                        keys.iter()
+                            .filter(|k| differ(m, k) != differ(other, k))
+                            .map(|k| format!("{k}={}", differ(m, k).unwrap_or("-".into())))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    };
+                    (diff(a, b), diff(b, a))
+                }
+                _ => (ours.to_string(), theirs.to_string()),
+            };
             failures.push(format!("{name}: {what}: ours {:.300} GBX.NET {:.300}", o, t));
         }
     };
@@ -200,25 +218,29 @@ fn compare(path: &Path, want: &Value, decompressed: &Path, failures: &mut Vec<St
     Ok(())
 }
 
-#[test]
-fn every_map_reads_as_gbx_net_reads_it() {
-    let Some(maps) = oracle(OracleSet::Corpus, Game::Tmnf, "tmx-2026-top") else {
-        return;
-    };
-    let Some(dump) = oracle(OracleSet::Gbxnet, Game::Tmnf, "tmx-2026-top") else {
-        return;
-    };
+/// Every `.Gbx` under `dir`, in path order (the stock maps sit in folders; the Exchange corpora are flat).
+fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+    for e in std::fs::read_dir(dir).unwrap() {
+        let p = e.unwrap().path();
+        if p.is_dir() {
+            walk(&p, out);
+        } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("gbx")) {
+            out.push(p);
+        }
+    }
+}
+
+/// Reads every map of one corpus and compares it with GBX.NET's dump of it; returns whether all agree.
+fn run_corpus(corpus: &str, maps: &Path, dump: &Path) -> bool {
     let mut want = BTreeMap::new();
     for line in std::fs::read_to_string(dump.join("maps.jsonl")).unwrap().lines() {
         let v: Value = serde_json::from_str(line).unwrap();
         want.insert(v["file"].as_str().unwrap().to_owned(), v);
     }
-    let mut files: Vec<_> = std::fs::read_dir(&maps)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
+    let mut files = Vec::new();
+    walk(maps, &mut files);
     files.sort();
-    assert_eq!(files.len(), want.len(), "maps and oracle lines");
+    assert_eq!(files.len(), want.len(), "{corpus}: maps and oracle lines");
     let (mut read, mut both_refuse, mut failures, mut refused) = (0, 0, Vec::new(), Vec::new());
     for path in &files {
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
@@ -227,24 +249,61 @@ fn every_map_reads_as_gbx_net_reads_it() {
         match (result, w["ok"].as_bool().unwrap()) {
             (Ok(()), true) => read += 1,
             (Err(e), true) => refused.push(format!("{name}: {e}")),
-            (Ok(()), false) => eprintln!("{name}: read here; GBX.NET refused it: {}", w["error"]),
+            (Ok(()), false) => eprintln!("{corpus}: {name}: read here; GBX.NET refused it: {}", w["error"]),
             (Err(e), false) => {
                 both_refuse += 1;
-                eprintln!("{name}: refused here ({e}) and by GBX.NET ({})", w["error"]);
+                eprintln!(
+                    "{corpus}: {name}: refused here ({e}) and by GBX.NET ({})",
+                    w["error"]
+                );
             }
         }
     }
     eprintln!(
-        "{} maps: {read} read and compared, {both_refuse} refused by both, {} refused here only, {} mismatches",
+        "{corpus}: {} maps: {read} read and compared, {both_refuse} refused by both, {} refused here only, {} mismatches",
         files.len(),
         refused.len(),
         failures.len()
     );
     for r in refused.iter().take(40) {
-        eprintln!("REFUSED {r}");
+        eprintln!("REFUSED {corpus}: {r}");
     }
     for f in failures.iter() {
-        eprintln!("MISMATCH {f}");
+        eprintln!("MISMATCH {corpus}: {f}");
     }
-    assert!(refused.is_empty() && failures.is_empty(), "see the lines above");
+    refused.is_empty() && failures.is_empty()
+}
+
+#[test]
+fn every_map_reads_as_gbx_net_reads_it() {
+    // the queries are literal: the inputs check reads them from this source
+    let corpora = [
+        (
+            "tmx-2026-top",
+            oracle(OracleSet::Corpus, Game::Tmnf, "tmx-2026-top"),
+            oracle(OracleSet::Gbxnet, Game::Tmnf, "tmx-2026-top"),
+        ),
+        (
+            "tmx-alltime-top",
+            oracle(OracleSet::Corpus, Game::Tmnf, "tmx-alltime-top"),
+            oracle(OracleSet::Gbxnet, Game::Tmnf, "tmx-alltime-top"),
+        ),
+        (
+            "tmx-newest",
+            oracle(OracleSet::Corpus, Game::Tmnf, "tmx-newest"),
+            oracle(OracleSet::Gbxnet, Game::Tmnf, "tmx-newest"),
+        ),
+        (
+            "tmnf-stock",
+            oracle(OracleSet::Corpus, Game::Tmnf, "tmnf-stock"),
+            oracle(OracleSet::Gbxnet, Game::Tmnf, "tmnf-stock"),
+        ),
+    ];
+    let mut all = true;
+    for (name, maps, dump) in &corpora {
+        if let (Some(maps), Some(dump)) = (maps, dump) {
+            all &= run_corpus(name, maps, dump);
+        }
+    }
+    assert!(all, "see the lines above");
 }

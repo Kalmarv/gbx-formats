@@ -35,6 +35,42 @@ primase_testdata::inputs! {
             about: r#"GBX.NET 2.5.0's reading of each corpus map: `maps.jsonl` (one line per map: container, chunk ids, node and chunk census, map fields, blocks) and `decompressed/<file>` (the map with its body decompressed by GBX.NET.LZO)"#,
             source: r#"the gbxnet-dump harness (GBX.NET 2.5.0, GBX.NET.LZO 2.1.6) over the corpus maps"#,
         },
+        Query::Oracle(OracleSet::Corpus, Game::Tmnf, "tmx-alltime-top") => {
+            status: Live,
+            gate: false,
+            about: r#"the 100 most downloaded TrackMania Nations Forever maps of all time on TrackMania Exchange (`<TrackId>.Gbx`)"#,
+            source: r#"tmnf.exchange `api/tracks` with `order1=18`, `count=100`; each from `trackgbx/<TrackId>`"#,
+        },
+        Query::Oracle(OracleSet::Gbxnet, Game::Tmnf, "tmx-alltime-top") => {
+            status: Live,
+            gate: false,
+            about: r#"GBX.NET 2.5.0's reading of each map of `tmx-alltime-top`: `maps.jsonl` (one line per map: container, chunk ids, node and chunk census, map fields, blocks) and `decompressed/<file>` (the map with its body decompressed by GBX.NET.LZO)"#,
+            source: r#"the gbxnet-dump harness (GBX.NET 2.5.0, GBX.NET.LZO 2.1.6) over the corpus maps"#,
+        },
+        Query::Oracle(OracleSet::Corpus, Game::Tmnf, "tmx-newest") => {
+            status: Live,
+            gate: false,
+            about: r#"the 100 most recently uploaded TrackMania Nations Forever maps on TrackMania Exchange when it was gathered (`<TrackId>.Gbx`)"#,
+            source: r#"tmnf.exchange `api/tracks` with `order1=2` (upload date, newest first), `count=100`; each from `trackgbx/<TrackId>`"#,
+        },
+        Query::Oracle(OracleSet::Gbxnet, Game::Tmnf, "tmx-newest") => {
+            status: Live,
+            gate: false,
+            about: r#"GBX.NET 2.5.0's reading of each map of `tmx-newest`: `maps.jsonl` (one line per map: container, chunk ids, node and chunk census, map fields, blocks) and `decompressed/<file>` (the map with its body decompressed by GBX.NET.LZO)"#,
+            source: r#"the gbxnet-dump harness (GBX.NET 2.5.0, GBX.NET.LZO 2.1.6) over the corpus maps"#,
+        },
+        Query::Oracle(OracleSet::Corpus, Game::Tmnf, "tmnf-stock") => {
+            status: Live,
+            gate: false,
+            about: r#"every `*.Challenge.Gbx` of a TrackMania Nations Forever install (72 maps, under `GameData/Tracks/...`)"#,
+            source: r#"the install's GameData folder, copied with its relative paths"#,
+        },
+        Query::Oracle(OracleSet::Gbxnet, Game::Tmnf, "tmnf-stock") => {
+            status: Live,
+            gate: false,
+            about: r#"GBX.NET 2.5.0's reading of each map of `tmnf-stock`: `maps.jsonl` (one line per map: container, chunk ids, node and chunk census, map fields, blocks) and `decompressed/<file>` (the map with its body decompressed by GBX.NET.LZO)"#,
+            source: r#"the gbxnet-dump harness (GBX.NET 2.5.0, GBX.NET.LZO 2.1.6) over the corpus maps"#,
+        },
     }
     debug {}
 }

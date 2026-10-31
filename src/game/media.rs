@@ -778,6 +778,36 @@ impl MediaBlockFxBloom {
         Ok(n)
     }
 }
+/// CGameCtnMediaBlockTrails (`0x030A9000`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MediaBlockTrails {
+    /// Start.
+    pub start: Option<f32>,
+    /// End.
+    pub end: Option<f32>,
+    /// Chunks.
+    pub chunks: Chunks,
+}
+impl MediaBlockTrails {
+    pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<Self> {
+        let mut n = Self {
+            start: None,
+            end: None,
+            chunks: Chunks::default(),
+        };
+        n.chunks = r.chunks("CGameCtnMediaBlockTrails", |r, id| {
+            match id {
+                0x030A9000 => {
+                    n.start = Some(r.f32()?);
+                    n.end = Some(r.f32()?);
+                }
+                _ => return Ok(false),
+            }
+            Ok(true)
+        })?;
+        Ok(n)
+    }
+}
 /// CGameCtnMediaBlockFxBlurMotion (`0x03082000`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct MediaBlockFxBlurMotion {

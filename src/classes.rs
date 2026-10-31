@@ -114,6 +114,8 @@ classes! {
     MediaBlockFxBlurDepth(game::media::MediaBlockFxBlurDepth) = 0x0308_1000, "CGameCtnMediaBlockFxBlurDepth";
     /// CGameCtnMediaBlockFxBloom.
     MediaBlockFxBloom(game::media::MediaBlockFxBloom) = 0x0308_3000, "CGameCtnMediaBlockFxBloom";
+    /// CGameCtnMediaBlockTrails.
+    MediaBlockTrails(game::media::MediaBlockTrails) = 0x030A_9000, "CGameCtnMediaBlockTrails";
     /// CGameCtnMediaBlockFxBlurMotion.
     MediaBlockFxBlurMotion(game::media::MediaBlockFxBlurMotion) = 0x0308_2000, "CGameCtnMediaBlockFxBlurMotion";
     /// CGameCtnMediaBlockCameraPath.
