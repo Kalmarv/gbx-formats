@@ -1,5 +1,11 @@
 //! Blowfish (Schneier, 1993) as Nadeo's packs use it: the standard cipher with its key's bytes taken four at a time as
 //! little-endian words, and each 8-byte block read as two little-endian halves, the first the left one.
+#![allow(
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::cast_possible_truncation,
+    reason = "a cipher over fixed tables: every index is a byte into a 256-entry box or a constant into the P-array,               and a block's halves are its two 32-bit words"
+)]
 
 use super::pi::{P, S};
 
@@ -20,10 +26,7 @@ impl std::fmt::Debug for Blowfish {
 impl Blowfish {
     /// The schedule of a key of 1 to 56 bytes (a pack's key is 16); its bytes are cycled through the P-array.
     pub(crate) fn new(key: &[u8]) -> Blowfish {
-        let mut bf = Blowfish {
-            p: P,
-            s: Box::new(S),
-        };
+        let mut bf = Blowfish { p: P, s: Box::new(S) };
         let mut key_bytes = key.iter().copied().cycle();
         for p in &mut bf.p {
             let mut word = 0u32;
@@ -104,11 +107,31 @@ mod tests {
             vec![b[3], b[2], b[1], b[0], b[7], b[6], b[5], b[4]]
         };
         for (key, plain, cipher) in [
-            (0x0000_0000_0000_0000u64, 0x0000_0000_0000_0000u64, 0x4EF9_9745_6198_DD78u64),
-            (0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF_FFFF_FFFF, 0x5186_6FD5_B85E_CB8A),
-            (0x3000_0000_0000_0000, 0x1000_0000_0000_0001, 0x7D85_6F9A_6130_63F2),
-            (0x0123_4567_89AB_CDEF, 0x1111_1111_1111_1111, 0x61F9_C380_2281_B096),
-            (0xFEDC_BA98_7654_3210, 0x0123_4567_89AB_CDEF, 0x0ACE_AB0F_C6A0_A28D),
+            (
+                0x0000_0000_0000_0000u64,
+                0x0000_0000_0000_0000u64,
+                0x4EF9_9745_6198_DD78u64,
+            ),
+            (
+                0xFFFF_FFFF_FFFF_FFFF,
+                0xFFFF_FFFF_FFFF_FFFF,
+                0x5186_6FD5_B85E_CB8A,
+            ),
+            (
+                0x3000_0000_0000_0000,
+                0x1000_0000_0000_0001,
+                0x7D85_6F9A_6130_63F2,
+            ),
+            (
+                0x0123_4567_89AB_CDEF,
+                0x1111_1111_1111_1111,
+                0x61F9_C380_2281_B096,
+            ),
+            (
+                0xFEDC_BA98_7654_3210,
+                0x0123_4567_89AB_CDEF,
+                0x0ACE_AB0F_C6A0_A28D,
+            ),
         ] {
             let bf = Blowfish::new(&key_le(key));
             assert_eq!(bf.encrypt_block(words(plain)), words(cipher), "key {key:016X}");

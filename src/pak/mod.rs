@@ -114,9 +114,8 @@ fn parse_hex<const N: usize>(text: &[u8]) -> Option<[u8; N]> {
     if text.len() != N.checked_mul(2)? {
         return None;
     }
-    for (o, pair) in out.iter_mut().zip(text.chunks_exact(2)) {
-        let [hi, lo] = pair else { return None };
-        *o = (digit(*hi)? << 4) | digit(*lo)?;
+    for (o, &[hi, lo]) in out.iter_mut().zip(text.as_chunks::<2>().0) {
+        *o = (digit(hi)? << 4) | digit(lo)?;
     }
     Some(out)
 }
@@ -139,8 +138,13 @@ impl PackList {
             let at = r.at;
             let key_key = md5(format!("{name}{salt}{KEY_STRING_SALT}").as_bytes());
             let key_string = unmask(r.take(32, "pack key")?, &key_key);
-            let key = parse_hex(&key_string)
-                .ok_or_else(|| bad(Space::Pack, at, format!("pack {name}: its key is not 32 hexadecimal digits")))?;
+            let key = parse_hex(&key_string).ok_or_else(|| {
+                bad(
+                    Space::Pack,
+                    at,
+                    format!("pack {name}: its key is not 32 hexadecimal digits"),
+                )
+            })?;
             packs.push(PackKey { name, flags, key });
         }
         let signature = r.array("signature")?;
@@ -173,7 +177,8 @@ pub fn name_hash(name: &str) -> String {
     let lower = name.to_lowercase();
     let bytes = lower.as_bytes();
     let mut out = String::with_capacity(34);
-    let len = bytes.len() as u8;
+    // the length's low byte, as the game stores it
+    let [len, ..] = bytes.len().to_le_bytes();
     for b in std::iter::once(len).chain(md5(bytes)) {
         for nibble in [b & 0xF, b >> 4] {
             out.push(char::from_digit(u32::from(nibble), 16).map_or('0', |c| c.to_ascii_uppercase()));
@@ -269,14 +274,26 @@ impl Pak {
         }
         let version = u32::from_le_bytes(r.array("version")?);
         if !VERSIONS.contains(&version) {
-            return Err(bad(Space::Pack, 8, format!("pack version {version}: expected one of {VERSIONS:?}")));
+            return Err(bad(
+                Space::Pack,
+                8,
+                format!("pack version {version}: expected one of {VERSIONS:?}"),
+            ));
         }
         let hex: String = base_key.iter().map(|b| format!("{b:02X}")).collect();
         let blowfish = Blowfish::new(&md5(format!("{hex}NadeoPak").as_bytes()));
         let iv = u64::from_le_bytes(r.array("header IV")?);
         let start = r.at;
         let len = bytes.len().saturating_sub(start);
-        let stream = FileStream::new(Some(blowfish.clone()), Arc::clone(&bytes), start, bytes.len(), iv, len, false)?;
+        let stream = FileStream::new(
+            Some(blowfish.clone()),
+            Arc::clone(&bytes),
+            start,
+            bytes.len(),
+            iv,
+            len,
+            false,
+        )?;
         let mut st = State::new(NodeTable::new(0, Vec::new()));
         st.stream = Some(stream);
         let mut h = Archive::stream(len, &mut st);
@@ -292,12 +309,13 @@ impl Pak {
         for i in 0..n {
             let at = h.here();
             let parent = h.i32()?;
-            let parent = match parent {
-                -1 => None,
-                p => Some(usize::try_from(p).ok().filter(|&p| p < n).ok_or_else(|| {
-                    bad(Space::Pack, at, format!("folder {i}: parent {p} of {n} folders"))
-                })?),
-            };
+            let parent =
+                match parent {
+                    -1 => None,
+                    p => Some(usize::try_from(p).ok().filter(|&p| p < n).ok_or_else(|| {
+                        bad(Space::Pack, at, format!("folder {i}: parent {p} of {n} folders"))
+                    })?),
+                };
             let mut name = h.string()?;
             if !name.ends_with('\\') && !name.ends_with('/') {
                 name.push('\\');
@@ -318,9 +336,18 @@ impl Pak {
             let at = h.here();
             let folder = match h.i32()? {
                 -1 => None,
-                f => Some(usize::try_from(f).ok().filter(|&f| f < folders.len()).ok_or_else(|| {
-                    bad(Space::Pack, at, format!("file {i}: folder {f} of {}", folders.len()))
-                })?),
+                f => Some(
+                    usize::try_from(f)
+                        .ok()
+                        .filter(|&f| f < folders.len())
+                        .ok_or_else(|| {
+                            bad(
+                                Space::Pack,
+                                at,
+                                format!("file {i}: folder {f} of {}", folders.len()),
+                            )
+                        })?,
+                ),
             };
             files.push(PakFile {
                 folder,
@@ -378,7 +405,11 @@ impl Pak {
     /// more at a time (`a\b\c.Gbx` is looked for as `a\b\` and `c.Gbx`, then as `a\` and `b\c.Gbx`).
     pub fn find(&self, path: &str) -> Option<&PakFile> {
         let path = path.replace('/', "\\");
-        let get = |p: &str| self.by_path.get(&p.to_lowercase()).and_then(|&i| self.files.get(i));
+        let get = |p: &str| {
+            self.by_path
+                .get(&p.to_lowercase())
+                .and_then(|&i| self.files.get(i))
+        };
         if let Some(f) = get(&path) {
             return Some(f);
         }
@@ -405,7 +436,11 @@ impl Pak {
                 .get(start..start.saturating_add(8))
                 .and_then(|b| b.try_into().ok())
                 .ok_or_else(|| bad(Space::Pack, start, "a file's IV past the end of the pack"))?;
-            (Some(self.blowfish.clone()), u64::from_le_bytes(iv), start.saturating_add(8))
+            (
+                Some(self.blowfish.clone()),
+                u64::from_le_bytes(iv),
+                start.saturating_add(8),
+            )
         } else {
             (None, 0, start)
         };
@@ -425,7 +460,8 @@ impl Pak {
     pub fn read(&self, file: &PakFile) -> Result<Vec<u8>> {
         let mut stream = self.open(file)?;
         let size = stream.size();
-        let gbx = file.class_id != 0 && !file.dont_use_dummy_write() && size >= 3 && stream.read(0, 3)? == b"GBX";
+        let gbx =
+            file.class_id != 0 && !file.dont_use_dummy_write() && size >= 3 && stream.read(0, 3)? == b"GBX";
         if !gbx {
             return stream.finish();
         }

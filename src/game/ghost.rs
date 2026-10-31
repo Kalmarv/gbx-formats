@@ -509,10 +509,10 @@ impl Ghost {
                         Ok(())
                     })?;
                 }
-                0x0309_2005 => n.race_time = Some(r.skippable(|r| nullable(r))?),
-                0x0309_2008 => n.respawns = Some(r.skippable(|r| nullable(r))?),
+                0x0309_2005 => n.race_time = Some(r.skippable(nullable)?),
+                0x0309_2008 => n.respawns = Some(r.skippable(nullable)?),
                 0x0309_2009 => n.light_trail_color = Some(r.skippable(|r| r.vec3())?),
-                0x0309_200A => n.stunt_score = Some(r.skippable(|r| nullable(r))?),
+                0x0309_200A => n.stunt_score = Some(r.skippable(nullable)?),
                 0x0309_200B => {
                     n.checkpoints = Some(r.skippable(|r| {
                         r.list(8, |r| {
@@ -529,7 +529,7 @@ impl Ghost {
                 0x0309_2010 => n.validate_challenge_uid = Some(r.id()?),
                 0x0309_2012 => n.security_key = Some((r.u32()?, r.array()?)),
                 0x0309_2013 => n.u13 = Some(r.skippable(|r| Ok([r.i32()?, r.i32()?]))?),
-                0x0309_2014 => n.ghost_version = Some(r.skippable(|r| nullable(r))?),
+                0x0309_2014 => n.ghost_version = Some(r.skippable(nullable)?),
                 0x0309_2015 => n.ghost_nickname = Some(r.id()?),
                 0x0309_2017 => {
                     n.metadata = Some(r.skippable(|r| {

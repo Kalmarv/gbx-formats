@@ -23,6 +23,12 @@ const CHUNK: usize = 256;
 /// How much plaintext the inflater produces at a time.
 const BLOCK: usize = 1024;
 
+/// A `u64`'s low and high 32 bits.
+fn halves(x: u64) -> (u32, u32) {
+    let [a, b, c, d, e, f, g, h] = x.to_le_bytes();
+    (u32::from_le_bytes([a, b, c, d]), u32::from_le_bytes([e, f, g, h]))
+}
+
 /// The cipher over a file's data: what follows its IV, read from the pack's bytes.
 #[derive(Debug)]
 struct Cipher {
@@ -42,9 +48,9 @@ impl Cipher {
     /// Folds 4 bytes into the accumulator, as the game's "dummy write" does.
     fn dummy_write(&mut self, data: [u8; 4]) {
         for b in data {
-            let (lo, hi) = (self.iv_xor as u32, (self.iv_xor >> 32) as u32);
+            let (lo, hi) = halves(self.iv_xor);
             let lo = (u32::from(b) | 0xAA) ^ ((lo << 13) | (hi >> 19));
-            let hi = ((self.iv_xor << 13) >> 32) as u32;
+            let (_, hi) = halves(self.iv_xor << 13);
             self.iv_xor = (u64::from(hi) << 32) | u64::from(lo);
         }
     }
@@ -53,7 +59,8 @@ impl Cipher {
     /// writes into the chain first; returns how many bytes it appended, 0 at the end of the ciphertext.
     fn chunk(&mut self, out: &mut Vec<u8>) -> usize {
         let left = self.end.saturating_sub(self.next);
-        let n = left.min(CHUNK) / 8 * 8;
+        // whole blocks only
+        let n = left.min(CHUNK) & !7;
         let Some(bytes) = self.pack.get(self.next..self.next.saturating_add(n)) else {
             return 0;
         };
@@ -62,10 +69,8 @@ impl Cipher {
         match &self.blowfish {
             None => out.extend_from_slice(bytes),
             Some(bf) => {
-                for block in bytes.chunks_exact(8) {
-                    let mut c = [0; 8];
-                    c.copy_from_slice(block);
-                    let c = u64::from_le_bytes(c);
+                for &block in bytes.as_chunks::<8>().0 {
+                    let c = u64::from_le_bytes(block);
                     out.extend_from_slice(&(bf.decrypt_block(c) ^ self.iv).to_le_bytes());
                     self.iv = c;
                 }
@@ -179,7 +184,10 @@ impl FileStream {
                 return Err(bad(
                     Space::File,
                     at,
-                    format!("the pack's ciphertext ends {at} bytes into a {}-byte file", self.size),
+                    format!(
+                        "the pack's ciphertext ends {at} bytes into a {}-byte file",
+                        self.size
+                    ),
                 ));
             }
             return Ok(());
@@ -215,7 +223,8 @@ impl FileStream {
                 format!("the zlib stream ends {at} bytes into a {}-byte file", self.size),
             ));
         }
-        self.out.extend_from_slice(block.get(..filled).unwrap_or_default());
+        self.out
+            .extend_from_slice(block.get(..filled).unwrap_or_default());
         Ok(())
     }
 
@@ -257,7 +266,11 @@ impl FileStream {
                 }
             }
             if !z.ended {
-                return Err(bad(Space::File, self.size, "the zlib stream does not end with the file"));
+                return Err(bad(
+                    Space::File,
+                    self.size,
+                    "the zlib stream does not end with the file",
+                ));
             }
         }
         if self.inflate.is_some() && self.out.len() != self.size {

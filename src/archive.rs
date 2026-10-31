@@ -27,7 +27,10 @@ use std::borrow::Cow;
 fn origin_error(e: BoundsError, origin: usize) -> BoundsError {
     match e {
         BoundsError::LengthOverflow {
-            offset, count, stride, ..
+            offset,
+            count,
+            stride,
+            ..
         } => BoundsError::LengthOverflow {
             offset,
             origin,
@@ -35,7 +38,10 @@ fn origin_error(e: BoundsError, origin: usize) -> BoundsError {
             stride,
         },
         BoundsError::OutOfBounds {
-            offset, length, total, ..
+            offset,
+            length,
+            total,
+            ..
         } => BoundsError::OutOfBounds {
             offset,
             origin,
@@ -216,8 +222,15 @@ impl<'a, 's> Archive<'a, 's> {
             Source::Stream { position, len } => {
                 let span = checked_span(*position, n, 1, *len)
                     .map_err(|e| bounds(space, origin_error(e, self.origin)))?;
-                let (start, end) = (self.origin.saturating_add(span.start), self.origin.saturating_add(span.end));
-                let stream = self.st.stream.as_mut().ok_or_else(|| bad(space, start, "no pack stream to read"))?;
+                let (start, end) = (
+                    self.origin.saturating_add(span.start),
+                    self.origin.saturating_add(span.end),
+                );
+                let stream = self
+                    .st
+                    .stream
+                    .as_mut()
+                    .ok_or_else(|| bad(space, start, "no pack stream to read"))?;
                 let bytes = stream.read(start, end)?.to_vec();
                 *position = span.end;
                 Ok(Cow::Owned(bytes))
@@ -348,7 +361,7 @@ impl<'a, 's> Archive<'a, 's> {
         let at = self.here();
         let n = usize::from(self.u8()?);
         let bytes = self.bytes(n)?;
-        std::str::from_utf8(bytes)
+        std::str::from_utf8(&bytes)
             .map(str::to_owned)
             .map_err(|e| self.bad_at(at, format!("string of {n} bytes is not UTF-8: {e}")))
     }
@@ -455,13 +468,6 @@ impl<'a, 's> Archive<'a, 's> {
         if let (Source::Stream { .. }, Some(stream)) = (&self.src, self.st.stream.as_mut()) {
             stream.dummy_write(data);
         }
-    }
-
-    /// Reads a node of class `class` stored without a reference (its class id implied by where it is), with the
-    /// dummy write its start makes.
-    pub(crate) fn direct_node(&mut self, class: u32) -> Result<crate::classes::Node> {
-        let at = self.here();
-        crate::classes::read_node(self, class, at)
     }
 
     /// A node reference (see the module documentation): `None` for -1. A new index reads its node into the table.
