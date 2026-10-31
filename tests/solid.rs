@@ -9,6 +9,7 @@
 )]
 
 use gbx_formats::plug::BoxAligned;
+use gbx_formats::plug::decorator::{DecoratorSolid, DecoratorTree};
 use gbx_formats::plug::func_tree::{KeysNatural, TreeSubVisualSequence};
 use gbx_formats::plug::solid::{Solid, SolidContent, SolidPhysics};
 use gbx_formats::plug::surface::{Surf, Surface, SurfaceGeom};
@@ -135,10 +136,15 @@ fn body() -> Vec<u8> {
 }
 
 fn file(body: &[u8]) -> Vec<u8> {
+    file_of(0x0900_5000, body)
+}
+
+/// The container: the main node's class, ten nodes and no files.
+fn file_of(class: u32, body: &[u8]) -> Vec<u8> {
     let mut f = b"GBX".to_vec();
     f.extend_from_slice(&6u16.to_le_bytes());
     f.extend_from_slice(b"BUUR");
-    u32s(&mut f, &[0x0900_5000, 0, 10]);
+    u32s(&mut f, &[class, 0, 10]);
     u32s(&mut f, &[0]); // no files
     f.extend_from_slice(body);
     f
@@ -342,5 +348,91 @@ fn refusals() {
     refused(
         patched(&[0x0904_A000, 2], &[0x0904_A000, 3_000_000]),
         "bytes outside",
+    );
+}
+
+/// A decorator solid with two decorators: the first of the newest chunk, the second of the oldest.
+fn decorators() -> Vec<u8> {
+    let mut b = Vec::new();
+    u32s(&mut b, &[0x090A_3000, 10, 2]);
+    u32s(&mut b, &[1, 0x090A_2000, 0x090A_2009, 3, 0x4000_0000]);
+    string(&mut b, "High");
+    u32s(&mut b, &[NONE, NONE, 6, 4, 1, 4, 1, 1, 0, 2, FACADE]);
+    u32s(
+        &mut b,
+        &[
+            2,
+            0x090A_2000,
+            0x090A_2006,
+            NONE,
+            NONE,
+            NONE,
+            5,
+            0,
+            3,
+            0,
+            1,
+            FACADE,
+        ],
+    );
+    u32s(&mut b, &[FACADE]);
+    b
+}
+
+#[test]
+fn decorators_read() {
+    let nodes = Gbx::parse(&file_of(0x090A_3000, &decorators()))
+        .unwrap()
+        .nodes()
+        .unwrap();
+    let solid: &DecoratorSolid = nodes.main().try_into().unwrap();
+    assert_eq!(
+        solid.tree_decorators,
+        Some(vec![Some(NodeIndex(1)), Some(NodeIndex(2))])
+    );
+    let newest: &DecoratorTree = get(&nodes, 1);
+    assert_eq!(newest.tree_id, Some(Id::Name("High".into())));
+    assert_eq!(newest.exist_cond, Some(6));
+    assert_eq!(newest.visible_cond, Some(4));
+    assert_eq!(newest.visible_apply_on_childs, Some(true));
+    assert_eq!(newest.shadow_caster_cond, Some(4));
+    assert_eq!(newest.shadow_caster_apply_on_childs, Some(true));
+    assert_eq!(newest.transform_visual_to_surface, Some(true));
+    assert_eq!(newest.no_location, Some(false));
+    assert_eq!(newest.collidable_cond, Some(2));
+    let oldest: &DecoratorTree = get(&nodes, 2);
+    assert_eq!(oldest.tree_id, Some(Id::Empty));
+    assert_eq!(oldest.exist_cond, None);
+    assert_eq!(oldest.visible_cond, Some(5));
+    assert_eq!(oldest.transform_visual_to_surface, Some(true));
+    assert_eq!((oldest.no_location, oldest.collidable_cond), (None, None));
+
+    // every truncation, a deprecated-list version that is not 10, and a chunk the decorator does not have
+    let whole = decorators();
+    for n in 0..whole.len() {
+        assert!(
+            Gbx::parse(&file_of(0x090A_3000, &whole[..n]))
+                .unwrap()
+                .nodes()
+                .is_err(),
+            "prefix {n}"
+        );
+    }
+    let mut other_version = whole.clone();
+    other_version[4..8].copy_from_slice(&9u32.to_le_bytes());
+    let e = Gbx::parse(&file_of(0x090A_3000, &other_version))
+        .unwrap()
+        .nodes()
+        .unwrap_err();
+    assert!(e.to_string().contains("tree decorators version 9"), "{e}");
+    let mut other_chunk = whole;
+    other_chunk[20..24].copy_from_slice(&0x090A_200Au32.to_le_bytes());
+    let e = Gbx::parse(&file_of(0x090A_3000, &other_chunk))
+        .unwrap()
+        .nodes()
+        .unwrap_err();
+    assert!(
+        e.to_string().contains("chunk 0x090a200a of CPlugDecoratorTree"),
+        "{e}"
     );
 }

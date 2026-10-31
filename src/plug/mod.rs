@@ -15,6 +15,7 @@
 )]
 
 pub mod bitmap;
+pub mod decorator;
 pub mod func_shader;
 pub mod func_tree;
 pub mod light;

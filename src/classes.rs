@@ -168,6 +168,10 @@ classes! {
     FuncTreeSubVisualSequence(plug::func_tree::TreeSubVisualSequence) = 0x0503_1000, "CFuncTreeSubVisualSequence", parent 0x0501_C000;
     /// Keys of natural numbers.
     FuncKeysNatural(plug::func_tree::KeysNatural) = 0x0503_0000, "CFuncKeysNatural", parent 0x0500_2000;
+    /// The decoration of a tree of a solid.
+    DecoratorTree(plug::decorator::DecoratorTree) = 0x090A_2000, "CPlugDecoratorTree", parent 0x0100_1000;
+    /// The decorations of a solid.
+    DecoratorSolid(plug::decorator::DecoratorSolid) = 0x090A_3000, "CPlugDecoratorSolid", parent 0x0100_1000;
     /// A solid.
     Solid(plug::solid::Solid) = 0x0900_5000, "CPlugSolid", parent 0x0902_B000;
     /// CPlugBitmap.
