@@ -187,6 +187,26 @@ classes! {
     MotionCmdBase(game::scene::MotionCmdBase) = 0x0802_9000, "CMotionCmdBase", parent 0x0100_5000;
     /// A shader track.
     MotionShader(game::scene::MotionShader) = 0x0802_B000, "CMotionShader", parent 0x0803_3000;
+    /// A decoration.
+    Decoration(game::decoration::Decoration) = 0x0303_8000, "CGameCtnDecoration", parent 0x2400_A000;
+    /// The size of a decoration.
+    DecorationSize(game::decoration::DecorationSize) = 0x0303_B000, "CGameCtnDecorationSize", parent 0x0100_1000;
+    /// The mood of a decoration.
+    DecorationMood(game::decoration::DecorationMood) = 0x0303_A000, "CGameCtnDecorationMood", parent 0x0100_1000;
+    /// A terrain modifier of a decoration.
+    DecorationTerrainModifier(game::decoration::DecorationTerrainModifier) = 0x0303_C000, "CGameCtnDecorationTerrainModifier", parent 0x0100_1000;
+    /// The audio of a decoration.
+    DecorationAudio(game::decoration::DecorationAudio) = 0x0303_9000, "CGameCtnDecorationAudio", parent 0x0100_1000;
+    /// A tree of a decorator.
+    DecoratorTree(game::decoration::DecoratorTree) = 0x090A_2000, "CPlugDecoratorTree", parent 0x0100_1000;
+    /// A decorator solid.
+    DecoratorSolid(game::decoration::DecoratorSolid) = 0x090A_3000, "CPlugDecoratorSolid", parent 0x0100_1000;
+    /// A flat zone.
+    ZoneFlat(game::collection::ZoneFlat) = 0x0305_D000, "CGameCtnZoneFlat", parent 0x2401_C000;
+    /// A frontier zone.
+    ZoneFrontier(game::collection::ZoneFrontier) = 0x0305_E000, "CGameCtnZoneFrontier", parent 0x2401_C000;
+    /// A collection.
+    Collection(game::collection::Collection) = 0x0303_3000, "CGameCtnCollection", parent 0x0100_1000;
     /// A solid.
     Solid(plug::solid::Solid) = 0x0900_5000, "CPlugSolid", parent 0x0902_B000;
 }

@@ -8,7 +8,9 @@
 pub mod block;
 pub mod blockinfo;
 pub mod challenge;
+pub mod collection;
 pub mod collector;
+pub mod decoration;
 pub mod ghost;
 pub mod media;
 pub mod parameters;
