@@ -258,7 +258,7 @@ impl Samples {
         r.end("the ghost samples")?;
 
         let mut records = Vec::new();
-        let mut rest = buffer;
+        let mut rest: &[u8] = &buffer;
         for i in 0..count {
             let size = if i.saturating_add(1) == count {
                 rest.len()
@@ -313,7 +313,7 @@ impl Samples {
         let size = r.u32()?;
         let packed = r.data()?;
         let size = usize::try_from(size).map_err(|_| r.bad_at(at, "sample stream size"))?;
-        let bytes = Zlib.decompress(packed, size)?;
+        let bytes = Zlib.decompress(&packed, size)?;
         let mut st = State::new(NodeTable::new(0, Vec::new()));
         let mut sub = Archive::new(&bytes, 0, Space::Body, &mut st);
         Samples::read(&mut sub).map_err(|e| match e {

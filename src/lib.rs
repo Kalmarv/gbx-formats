@@ -6,6 +6,7 @@
 //!   the index the file gives each ([`Nodes`], [`Node`]). A node is a stream of chunks; a chunk this crate does not
 //!   read is kept as stored when the file marks it skippable ([`Chunks::unread`]) and refused otherwise, since its
 //!   size is then unknown ([`Error::UnknownChunk`]). A class it does not read is refused ([`Error::UnknownClass`]).
+//! - [`pak`]: TrackMania Nations Forever's pack files and their key list, each file decrypted as the game reads it.
 //! - [`game::challenge`]: a map's header chunks ([`game::challenge::Header`]) and body ([`game::challenge::Challenge`]):
 //!   its blocks, checkpoints, medal times, mediatracker clips and the rest.
 //!
@@ -40,6 +41,7 @@ mod error;
 pub mod game;
 mod gbx;
 mod node;
+pub mod pak;
 pub mod plug;
 
 pub use archive::{Id, Ident, PackDesc};

@@ -207,68 +207,134 @@ fn ref_table(r: &mut Archive<'_, '_>) -> Result<RefTable> {
     Ok(table)
 }
 
+/// The container up to its body, read from any archive: the header chunks as spans of the file.
+#[derive(Debug)]
+pub(crate) struct Head {
+    pub(crate) version: u16,
+    pub(crate) ref_table_compression: Compression,
+    pub(crate) body_compression: Compression,
+    pub(crate) release: bool,
+    pub(crate) class_id: u32,
+    /// Each header chunk's id, heavy bit, and data's offset and length.
+    pub(crate) header_chunks: Vec<(u32, bool, usize, usize)>,
+    pub(crate) nodes: u32,
+    pub(crate) ref_table: RefTable,
+}
+
+/// Reads the container from its first byte up to its body.
+pub(crate) fn head(r: &mut Archive<'_, '_>) -> Result<Head> {
+    if r.array::<3>()? != *b"GBX" {
+        return Err(bad(Space::File, 0, "not a Gbx file: expected GBX"));
+    }
+    let at = r.here();
+    let version = r.u16()?;
+    if !VERSIONS.contains(&version) {
+        return Err(r.bad_at(at, format!("Gbx version {version}: expected one of {VERSIONS:?}")));
+    }
+    let at = r.here();
+    match r.u8()? {
+        b'B' => {}
+        b'T' => return Err(r.bad_at(at, "text-format Gbx: only the binary format is read")),
+        b => return Err(r.bad_at(at, format!("format {b:#04x}: expected B"))),
+    }
+    let ref_table_compression = compression(r, "reference table")?;
+    let body_compression = compression(r, "body")?;
+    let at = r.here();
+    let release = match r.u8()? {
+        b'R' => true,
+        b'E' => false,
+        b => return Err(r.bad_at(at, format!("mode {b:#04x}: expected R or E"))),
+    };
+    let class_id = r.u32()?;
+    let user_data = r.data()?;
+    let header_chunks = header_chunks(&user_data, r.here().saturating_sub(user_data.len()))?;
+    let nodes = r.u32()?;
+    let ref_table = ref_table(r)?;
+    if ref_table_compression == Compression::Compressed && !ref_table.external.is_empty() {
+        return Err(r.bad("a compressed reference table: only uncompressed ones are read"));
+    }
+    Ok(Head {
+        version,
+        ref_table_compression,
+        body_compression,
+        release,
+        class_id,
+        header_chunks,
+        nodes,
+        ref_table,
+    })
+}
+
+/// Reads the nodes of a body from `r`, which is at its start: the main node, of class `class_id`, and every node its
+/// references read. The body must end with the main node.
+pub(crate) fn body_nodes(r: &mut Archive<'_, '_>, class_id: u32) -> Result<crate::classes::Node> {
+    let at = r.here();
+    let main = crate::classes::read_node(r, class_id, at)?;
+    r.end("the body")?;
+    Ok(main)
+}
+
+/// The node table of a body, given the container's node count and reference table.
+pub(crate) fn node_table(nodes: u32, ref_table: &RefTable) -> Result<NodeTable> {
+    if nodes == 0 {
+        return Err(bad(
+            Space::File,
+            0,
+            "the header counts no nodes, not even the main one",
+        ));
+    }
+    let external = ref_table.external.iter().map(|e| e.node_index).collect();
+    let mut table = NodeTable::new(nodes, external);
+    table.reserve(0);
+    Ok(table)
+}
+
 impl<'a> Gbx<'a> {
     /// Reads the container. The header chunks and the body are kept as stored.
     pub fn parse(bytes: &'a [u8]) -> Result<Gbx<'a>> {
         let mut st = State::new(NodeTable::new(0, Vec::new()));
         let mut r = Archive::new(bytes, 0, Space::File, &mut st);
-        if r.array::<3>()? != *b"GBX" {
-            return Err(bad(Space::File, 0, "not a Gbx file: expected GBX"));
-        }
-        let at = r.here();
-        let version = r.u16()?;
-        if !VERSIONS.contains(&version) {
-            return Err(r.bad_at(at, format!("Gbx version {version}: expected one of {VERSIONS:?}")));
-        }
-        let at = r.here();
-        match r.u8()? {
-            b'B' => {}
-            b'T' => return Err(r.bad_at(at, "text-format Gbx: only the binary format is read")),
-            b => return Err(r.bad_at(at, format!("format {b:#04x}: expected B"))),
-        }
-        let ref_table_compression = compression(&mut r, "reference table")?;
-        let body_compression = compression(&mut r, "body")?;
-        let at = r.here();
-        let release = match r.u8()? {
-            b'R' => true,
-            b'E' => false,
-            b => return Err(r.bad_at(at, format!("mode {b:#04x}: expected R or E"))),
-        };
-        let class_id = r.u32()?;
-        let user_data = r.data()?;
-        let header_chunks = header_chunks(user_data, r.here().saturating_sub(user_data.len()))?;
-        let nodes = r.u32()?;
-        let ref_table = ref_table(&mut r)?;
-        if ref_table_compression == Compression::Compressed && !ref_table.external.is_empty() {
-            return Err(r.bad("a compressed reference table: only uncompressed ones are read"));
-        }
-        let body = match body_compression {
+        let head = head(&mut r)?;
+        let header_chunks = head
+            .header_chunks
+            .iter()
+            .map(|&(id, heavy, offset, len)| HeaderChunk {
+                id,
+                heavy,
+                offset,
+                // within the user data, which was read from `bytes`
+                bytes: bytes.get(offset..offset.saturating_add(len)).unwrap_or_default(),
+            })
+            .collect();
+        let body = match head.body_compression {
             Compression::Compressed => {
                 let size = r.count(0)?;
-                let data = r.data()?;
+                let n = r.count(1)?;
+                let offset = r.here();
+                r.bytes(n)?;
                 r.end("the compressed body")?;
                 Body::Compressed {
                     size,
-                    offset: r.here().saturating_sub(data.len()),
-                    data,
+                    offset,
+                    data: bytes.get(offset..offset.saturating_add(n)).unwrap_or_default(),
                 }
             }
             Compression::Uncompressed => {
                 let offset = r.here();
                 Body::Uncompressed {
                     offset,
-                    data: r.bytes(r.remaining())?,
+                    data: bytes.get(offset..).unwrap_or_default(),
                 }
             }
         };
         Ok(Gbx {
-            version,
-            ref_table_compression,
-            release,
-            class_id,
+            version: head.version,
+            ref_table_compression: head.ref_table_compression,
+            release: head.release,
+            class_id: head.class_id,
             header_chunks,
-            nodes,
-            ref_table,
+            nodes: head.nodes,
+            ref_table: head.ref_table,
             body,
         })
     }
@@ -284,19 +350,9 @@ impl<'a> Gbx<'a> {
     /// Reads the nodes of `body` (the bytes [`Gbx::body`] returns): the main node, of the class the header names,
     /// and every node its references read. The body must end with the main node.
     pub fn read_nodes(&self, body: &[u8]) -> Result<Nodes> {
-        if self.nodes == 0 {
-            return Err(bad(
-                Space::File,
-                0,
-                "the header counts no nodes, not even the main one",
-            ));
-        }
-        let external = self.ref_table.external.iter().map(|e| e.node_index).collect();
-        let mut st = State::new(NodeTable::new(self.nodes, external));
-        st.nodes.reserve(0);
+        let mut st = State::new(node_table(self.nodes, &self.ref_table)?);
         let mut r = Archive::new(body, 0, Space::Body, &mut st);
-        let main = crate::classes::read_node(&mut r, self.class_id, 0)?;
-        r.end("the body")?;
+        let main = body_nodes(&mut r, self.class_id)?;
         Ok(st.nodes.into_nodes(main))
     }
 
@@ -306,7 +362,7 @@ impl<'a> Gbx<'a> {
     }
 }
 
-fn header_chunks(user_data: &[u8], origin: usize) -> Result<Vec<HeaderChunk<'_>>> {
+fn header_chunks(user_data: &[u8], origin: usize) -> Result<Vec<(u32, bool, usize, usize)>> {
     if user_data.is_empty() {
         return Ok(Vec::new());
     }
@@ -323,12 +379,8 @@ fn header_chunks(user_data: &[u8], origin: usize) -> Result<Vec<HeaderChunk<'_>>
     for (id, heavy, size) in table {
         let offset = r.here();
         let size = usize::try_from(size).unwrap_or(usize::MAX);
-        chunks.push(HeaderChunk {
-            id,
-            heavy,
-            offset,
-            bytes: r.bytes(size)?,
-        });
+        r.bytes(size)?;
+        chunks.push((id, heavy, offset, size));
     }
     r.end("the user data")?;
     Ok(chunks)

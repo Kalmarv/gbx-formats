@@ -20,7 +20,30 @@
 
 use crate::error::{Error, Result, Space, bad, bounds};
 use crate::node::{Chunks, NodeIndex, NodeTable, RawChunk};
-use primase_foundations::bytes::{Cursor, Endian::Little};
+use primase_foundations::bytes::{BoundsError, Cursor, Endian::Little, checked_span};
+use std::borrow::Cow;
+
+/// A span error from [`checked_span`] (which counts from 0) given the archive's origin, as a cursor reports it.
+fn origin_error(e: BoundsError, origin: usize) -> BoundsError {
+    match e {
+        BoundsError::LengthOverflow {
+            offset, count, stride, ..
+        } => BoundsError::LengthOverflow {
+            offset,
+            origin,
+            count,
+            stride,
+        },
+        BoundsError::OutOfBounds {
+            offset, length, total, ..
+        } => BoundsError::OutOfBounds {
+            offset,
+            origin,
+            length,
+            total,
+        },
+    }
+}
 
 /// The skip marker before a skippable chunk's size: `PIKS` read as a little-endian `u32`.
 pub(crate) const SKIP: u32 = 0x534B_4950;
@@ -83,11 +106,14 @@ pub(crate) struct Ids {
     names: Vec<(u32, String)>,
 }
 
-/// What a read keeps between chunks: the id scope and the nodes read so far.
+/// What a read keeps between chunks: the id scope, the nodes read so far and, for a file read from a pack, the stream
+/// its plaintext comes from.
 #[derive(Debug)]
 pub(crate) struct State {
     pub(crate) ids: Ids,
     pub(crate) nodes: NodeTable,
+    /// The pack file whose plaintext a [`Source::Stream`] archive reads.
+    pub(crate) stream: Option<crate::pak::FileStream>,
 }
 
 impl State {
@@ -95,15 +121,26 @@ impl State {
         State {
             ids: Ids::default(),
             nodes,
+            stream: None,
         }
     }
+}
+
+/// Where an archive's bytes come from.
+#[derive(Debug)]
+enum Source<'a> {
+    /// Bytes given whole.
+    Slice(Cursor<'a>),
+    /// A pack file's plaintext, decrypted as the read reaches it ([`State::stream`]): `len` bytes from the archive's
+    /// origin, `position` of them read.
+    Stream { position: usize, len: usize },
 }
 
 /// A reader over one span of bytes (a header chunk, the body, a skippable chunk's data), sharing the read's
 /// [`State`].
 #[derive(Debug)]
 pub(crate) struct Archive<'a, 's> {
-    cur: Cursor<'a>,
+    src: Source<'a>,
     /// The offset of the span's first byte in `space`.
     origin: usize,
     space: Space,
@@ -113,16 +150,33 @@ pub(crate) struct Archive<'a, 's> {
 impl<'a, 's> Archive<'a, 's> {
     pub(crate) fn new(bytes: &'a [u8], origin: usize, space: Space, st: &'s mut State) -> Self {
         Archive {
-            cur: Cursor::with_origin(bytes, origin),
+            src: Source::Slice(Cursor::with_origin(bytes, origin)),
             origin,
             space,
             st,
         }
     }
 
+    /// An archive over the plaintext of the pack file in `st.stream`, from its first byte: `len` bytes.
+    pub(crate) fn stream(len: usize, st: &'s mut State) -> Self {
+        Archive {
+            src: Source::Stream { position: 0, len },
+            origin: 0,
+            space: Space::File,
+            st,
+        }
+    }
+
+    fn position(&self) -> usize {
+        match &self.src {
+            Source::Slice(cur) => cur.position(),
+            Source::Stream { position, .. } => *position,
+        }
+    }
+
     /// The offset of the next byte, in the archive's space.
     pub(crate) fn here(&self) -> usize {
-        self.origin.saturating_add(self.cur.position())
+        self.origin.saturating_add(self.position())
     }
 
     /// An error at the next byte.
@@ -140,25 +194,46 @@ impl<'a, 's> Archive<'a, 's> {
     }
 
     pub(crate) fn remaining(&self) -> usize {
-        self.cur.remaining()
+        match &self.src {
+            Source::Slice(cur) => cur.remaining(),
+            Source::Stream { position, len } => len.saturating_sub(*position),
+        }
     }
 
     /// Refuses bytes left over: a span must be read to its end.
     pub(crate) fn end(&self, what: &str) -> Result<()> {
-        match self.cur.remaining() {
+        match self.remaining() {
             0 => Ok(()),
             n => Err(self.bad(format!("{n} bytes left at the end of {what}"))),
         }
     }
 
-    pub(crate) fn bytes(&mut self, n: usize) -> Result<&'a [u8]> {
+    /// The next `n` bytes: borrowed from bytes given whole, copied from a stream.
+    pub(crate) fn bytes(&mut self, n: usize) -> Result<Cow<'a, [u8]>> {
         let space = self.space;
-        self.cur.take(n).map_err(|e| bounds(space, e))
+        match &mut self.src {
+            Source::Slice(cur) => cur.take(n).map(Cow::Borrowed).map_err(|e| bounds(space, e)),
+            Source::Stream { position, len } => {
+                let span = checked_span(*position, n, 1, *len)
+                    .map_err(|e| bounds(space, origin_error(e, self.origin)))?;
+                let (start, end) = (self.origin.saturating_add(span.start), self.origin.saturating_add(span.end));
+                let stream = self.st.stream.as_mut().ok_or_else(|| bad(space, start, "no pack stream to read"))?;
+                let bytes = stream.read(start, end)?.to_vec();
+                *position = span.end;
+                Ok(Cow::Owned(bytes))
+            }
+        }
     }
 
     pub(crate) fn array<const N: usize>(&mut self) -> Result<[u8; N]> {
         let space = self.space;
-        self.cur.array::<N>().map_err(|e| bounds(space, e))
+        if let Source::Slice(cur) = &mut self.src {
+            return cur.array::<N>().map_err(|e| bounds(space, e));
+        }
+        let bytes = self.bytes(N)?;
+        let mut out = [0; N];
+        out.copy_from_slice(&bytes);
+        Ok(out)
     }
 
     pub(crate) fn u8(&mut self) -> Result<u8> {
@@ -222,7 +297,21 @@ impl<'a, 's> Archive<'a, 's> {
     /// A `u32` count of entries of at least `each` bytes that the rest of the span can hold.
     pub(crate) fn count(&mut self, each: usize) -> Result<usize> {
         let space = self.space;
-        self.cur.count(Little, each).map_err(|e| bounds(space, e))
+        if let Source::Slice(cur) = &mut self.src {
+            return cur.count(Little, each).map_err(|e| bounds(space, e));
+        }
+        let start = self.position();
+        let n = usize::try_from(self.u32()?).unwrap_or(usize::MAX);
+        let after = self.position();
+        let origin = self.origin;
+        if let Source::Stream { position, len } = &mut self.src
+            && let Err(e) = checked_span(after, n, each, *len)
+        {
+            // as a cursor does: the archive stays before the count
+            *position = start;
+            return Err(bounds(space, origin_error(e, origin)));
+        }
+        Ok(n)
     }
 
     /// A counted list, each entry at least `each` bytes.
@@ -240,7 +329,7 @@ impl<'a, 's> Archive<'a, 's> {
     }
 
     /// Counted bytes: an `i32` length and the bytes.
-    pub(crate) fn data(&mut self) -> Result<&'a [u8]> {
+    pub(crate) fn data(&mut self) -> Result<Cow<'a, [u8]>> {
         let n = self.count(1)?;
         self.bytes(n)
     }
@@ -249,7 +338,7 @@ impl<'a, 's> Archive<'a, 's> {
     pub(crate) fn string(&mut self) -> Result<String> {
         let at = self.here();
         let bytes = self.data()?;
-        std::str::from_utf8(bytes)
+        std::str::from_utf8(&bytes)
             .map(str::to_owned)
             .map_err(|e| self.bad_at(at, format!("string of {} bytes is not UTF-8: {e}", bytes.len())))
     }
@@ -340,6 +429,21 @@ impl<'a, 's> Archive<'a, 's> {
         })
     }
 
+    /// The dummy write a pack file's reader makes (see [`crate::pak`]): `data` folded into the cipher's chain, when
+    /// this archive reads a pack file's stream directly (not a buffer of its own, as a skippable chunk is).
+    pub(crate) fn dummy_write(&mut self, data: [u8; 4]) {
+        if let (Source::Stream { .. }, Some(stream)) = (&self.src, self.st.stream.as_mut()) {
+            stream.dummy_write(data);
+        }
+    }
+
+    /// Reads a node of class `class` stored without a reference (its class id implied by where it is), with the
+    /// dummy write its start makes.
+    pub(crate) fn direct_node(&mut self, class: u32) -> Result<crate::classes::Node> {
+        let at = self.here();
+        crate::classes::read_node(self, class, at)
+    }
+
     /// A node reference (see the module documentation): `None` for -1. A new index reads its node into the table.
     pub(crate) fn node_ref(&mut self) -> Result<Option<NodeIndex>> {
         let at = self.here();
@@ -366,8 +470,12 @@ impl<'a, 's> Archive<'a, 's> {
         Ok(Some(NodeIndex(index)))
     }
 
-    /// A chunk stored skippable: the marker, its size, and `f` reading exactly that many bytes.
-    pub(crate) fn skippable<T>(&mut self, f: impl FnOnce(&mut Archive<'a, '_>) -> Result<T>) -> Result<T> {
+    /// A chunk stored skippable: the marker, its size, and `f` reading exactly that many bytes. The game archives a
+    /// skippable chunk through a buffer of its own, so a pack file's reader makes no dummy writes within it.
+    pub(crate) fn skippable<T>(
+        &mut self,
+        f: impl for<'b> FnOnce(&mut Archive<'b, '_>) -> Result<T>,
+    ) -> Result<T> {
         let at = self.here();
         let marker = self.u32()?;
         if marker != SKIP {
@@ -376,7 +484,7 @@ impl<'a, 's> Archive<'a, 's> {
         let size = self.count(1)?;
         let origin = self.here();
         let bytes = self.bytes(size)?;
-        let mut sub = Archive::new(bytes, origin, self.space, &mut *self.st);
+        let mut sub = Archive::new(&bytes, origin, self.space, &mut *self.st);
         let out = f(&mut sub)?;
         sub.end("the skippable chunk")?;
         Ok(out)
@@ -417,7 +525,7 @@ impl<'a, 's> Archive<'a, 's> {
                 .count(1)
                 .map_err(|_| self.bad_at(marker_at, "skippable chunk size"))?;
             let offset = self.here();
-            let bytes = self.bytes(size)?.to_vec();
+            let bytes = self.bytes(size)?.into_owned();
             chunks.unread.push(RawChunk { id, offset, bytes });
         }
     }

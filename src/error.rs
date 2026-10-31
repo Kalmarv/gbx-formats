@@ -10,6 +10,8 @@ pub enum Space {
     File,
     /// The decompressed body.
     Body,
+    /// A pack file (`.pak`) or key list, as stored.
+    Pack,
 }
 
 impl std::fmt::Display for Space {
@@ -17,6 +19,7 @@ impl std::fmt::Display for Space {
         f.write_str(match self {
             Space::File => "Gbx file",
             Space::Body => "Gbx body (decompressed)",
+            Space::Pack => "pack",
         })
     }
 }
