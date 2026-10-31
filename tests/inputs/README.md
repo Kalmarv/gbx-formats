@@ -13,6 +13,7 @@ fails when they differ); [the README](../../README.md#running-the-tests) says ho
 
 | key | gate | about | source |
 | --- | --- | --- | --- |
+| `installs.tmnf` | - | TrackMania Nations Forever's install folder (`Packs/`: packlist.dat and the Game, Resource and Stadium packs; `GameData/`) | the user's own install (Steam, TrackMania Nations Forever, Nadeo.ini Version=2.11.16) |
 | `scratch.root` | - | where real-data tests write their outputs (the OS temporary folder when unset) | - |
 
 #### Oracle sets (`<oracles.root>/<set>/<game>/`)
@@ -26,6 +27,7 @@ fails when they differ); [the README](../../README.md#running-the-tests) says ho
 
 | key | status | gate | about | source |
 | --- | --- | --- | --- | --- |
+| `installs.tmnf/Packs` | live | - | the install's `Packs` folder: `packlist.dat` (the packs' keys) and `Game.pak`, `Resource.pak`, `Stadium.pak` (NadeoPak version 3; 614, 27 and 1,931 files) | the user's own install |
 | `oracles.corpus.tmnf/tmx-2026-top` | live | - | the 100 most downloaded TrackMania Nations Forever maps uploaded to TrackMania Exchange in 2026 (`<TrackId>.Gbx`, 32 MB) | tmnf.exchange `api/tracks` ordered by downloads, uploaded after 2026-01-01; each from `trackgbx/<TrackId>` |
 | `oracles.gbxnet.tmnf/tmx-2026-top` | live | - | GBX.NET 2.5.0's reading of each corpus map: `maps.jsonl` (one line per map: container, chunk ids, node and chunk census, map fields, blocks) and `decompressed/<file>` (the map with its body decompressed by GBX.NET.LZO) | the gbxnet-dump harness (GBX.NET 2.5.0, GBX.NET.LZO 2.1.6) over the corpus maps |
 | `oracles.corpus.tmnf/tmx-alltime-top` | live | - | the 100 most downloaded TrackMania Nations Forever maps of all time on TrackMania Exchange (`<TrackId>.Gbx`) | tmnf.exchange `api/tracks` with `order1=18`, `count=100`; each from `trackgbx/<TrackId>` |
@@ -33,6 +35,7 @@ fails when they differ); [the README](../../README.md#running-the-tests) says ho
 | `oracles.corpus.tmnf/tmx-newest` | live | - | the 100 most recently uploaded TrackMania Nations Forever maps on TrackMania Exchange when it was gathered (`<TrackId>.Gbx`) | tmnf.exchange `api/tracks` with `order1=2` (upload date, newest first), `count=100`; each from `trackgbx/<TrackId>` |
 | `oracles.gbxnet.tmnf/tmx-newest` | live | - | GBX.NET 2.5.0's reading of each map of `tmx-newest`: `maps.jsonl` (one line per map: container, chunk ids, node and chunk census, map fields, blocks) and `decompressed/<file>` (the map with its body decompressed by GBX.NET.LZO) | the gbxnet-dump harness (GBX.NET 2.5.0, GBX.NET.LZO 2.1.6) over the corpus maps |
 | `oracles.corpus.tmnf/tmnf-stock` | live | - | every `*.Challenge.Gbx` of a TrackMania Nations Forever install (72 maps, under `GameData/Tracks/...`) | the install's GameData folder, copied with its relative paths |
+| `oracles.gbxnet.tmnf/tmnf-packs` | live | - | GBX.NET 2.5.0's extraction of the install's three packs (2,572 files): `<pack>/<path>` (each file's plaintext, under its real name where GBX.NET resolves the stored hash), `list.txt` (pack, size, class id, path, kind per file) and `writes.tsv` (every dummy write its node reading made: pack, path, plaintext position, `class` with the class id and the parent its reflection gives, or `data` with the 4 bytes) | the gbxnet-pak harness (GBX.NET 2.5.0's NadeoPak with a recording IClassEncryptionInitializer) over `Packs/*.pak` with `packlist.dat`'s keys |
 | `oracles.gbxnet.tmnf/tmnf-stock` | live | - | GBX.NET 2.5.0's reading of each map of `tmnf-stock`: `maps.jsonl` (one line per map: container, chunk ids, node and chunk census, map fields, blocks) and `decompressed/<file>` (the map with its body decompressed by GBX.NET.LZO) | the gbxnet-dump harness (GBX.NET 2.5.0, GBX.NET.LZO 2.1.6) over the corpus maps |
 
 <!-- end of real-data inputs -->

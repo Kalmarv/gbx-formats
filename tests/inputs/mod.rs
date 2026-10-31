@@ -9,7 +9,13 @@ primase_testdata::inputs! {
     games {
         Tmnf = "tmnf",
     }
-    installs {}
+    installs {
+        Tmnf {
+            about: "TrackMania Nations Forever's install folder (`Packs/`: packlist.dat and the Game, Resource and Stadium packs; `GameData/`)",
+            source: "the user's own install (Steam, TrackMania Nations Forever, Nadeo.ini Version=2.11.16)",
+            gate: false,
+        },
+    }
     keys {}
     tools {}
     oracle_sets {
@@ -23,6 +29,12 @@ primase_testdata::inputs! {
         },
     }
     declared {
+        Query::Install(Game::Tmnf, Some("Packs")) => {
+            status: Live,
+            gate: false,
+            about: r#"the install's `Packs` folder: `packlist.dat` (the packs' keys) and `Game.pak`, `Resource.pak`, `Stadium.pak` (NadeoPak version 3; 614, 27 and 1,931 files)"#,
+            source: r#"the user's own install"#,
+        },
         Query::Oracle(OracleSet::Corpus, Game::Tmnf, "tmx-2026-top") => {
             status: Live,
             gate: false,
@@ -64,6 +76,12 @@ primase_testdata::inputs! {
             gate: false,
             about: r#"every `*.Challenge.Gbx` of a TrackMania Nations Forever install (72 maps, under `GameData/Tracks/...`)"#,
             source: r#"the install's GameData folder, copied with its relative paths"#,
+        },
+        Query::Oracle(OracleSet::Gbxnet, Game::Tmnf, "tmnf-packs") => {
+            status: Live,
+            gate: false,
+            about: r#"GBX.NET 2.5.0's extraction of the install's three packs (2,572 files): `<pack>/<path>` (each file's plaintext, under its real name where GBX.NET resolves the stored hash), `list.txt` (pack, size, class id, path, kind per file) and `writes.tsv` (every dummy write its node reading made: pack, path, plaintext position, `class` with the class id and the parent its reflection gives, or `data` with the 4 bytes)"#,
+            source: r#"the gbxnet-pak harness (GBX.NET 2.5.0's NadeoPak with a recording IClassEncryptionInitializer) over `Packs/*.pak` with `packlist.dat`'s keys"#,
         },
         Query::Oracle(OracleSet::Gbxnet, Game::Tmnf, "tmnf-stock") => {
             status: Live,
