@@ -213,6 +213,21 @@ pub struct Clips {
     pub end_race: Option<NodeIndex>,
 }
 
+impl Clips {
+    /// Resolves the intro reference to a clip; absent, external or differently typed references return `None`.
+    pub fn intro<'n>(&self, nodes: &'n crate::Nodes) -> Option<&'n super::media::MediaClip> {
+        nodes.get(self.intro?)?.try_into().ok()
+    }
+    /// Resolves the in-game reference to its clip group.
+    pub fn in_game<'n>(&self, nodes: &'n crate::Nodes) -> Option<&'n super::media::MediaClipGroup> {
+        nodes.get(self.in_game?)?.try_into().ok()
+    }
+    /// Resolves the end-of-race reference to its clip group.
+    pub fn end_race<'n>(&self, nodes: &'n crate::Nodes) -> Option<&'n super::media::MediaClipGroup> {
+        nodes.get(self.end_race?)?.try_into().ok()
+    }
+}
+
 /// A custom camera for the thumbnail.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CustomCamera {
@@ -341,6 +356,13 @@ fn thumbnail_camera(r: &mut Archive<'_, '_>) -> Result<ThumbnailCamera> {
         camera,
         comments: r.string()?,
     })
+}
+
+impl Challenge {
+    /// Resolves the global clip; absent, external or differently typed references return `None`.
+    pub fn clip_global<'n>(&self, nodes: &'n crate::Nodes) -> Option<&'n super::media::MediaClip> {
+        nodes.get(self.clip_global.flatten()?)?.try_into().ok()
+    }
 }
 
 impl Challenge {

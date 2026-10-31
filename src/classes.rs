@@ -81,4 +81,46 @@ classes! {
     ChallengeParameters(game::collector::ChallengeParameters) = 0x0305_B000, "CGameCtnChallengeParameters";
     /// A block's skin.
     BlockSkin(game::block::BlockSkin) = 0x0305_9000, "CGameCtnBlockSkin";
+    /// CGameCtnMediaClipGroup.
+    MediaClipGroup(game::media::MediaClipGroup) = 0x0307a000, "CGameCtnMediaClipGroup";
+    /// CGameCtnMediaClip.
+    MediaClip(game::media::MediaClip) = 0x03079000, "CGameCtnMediaClip";
+    /// CGameCtnMediaTrack.
+    MediaTrack(game::media::MediaTrack) = 0x03078000, "CGameCtnMediaTrack";
+    /// CGameCtnMediaBlockText.
+    MediaBlockText(game::media::MediaBlockText) = 0x030a8000, "CGameCtnMediaBlockText";
+    /// CGameCtnMediaBlockCameraCustom.
+    MediaBlockCameraCustom(game::media::MediaBlockCameraCustom) = 0x030a2000, "CGameCtnMediaBlockCameraCustom";
+    /// CGameCtnMediaBlockTransitionFade.
+    MediaBlockTransitionFade(game::media::MediaBlockTransitionFade) = 0x030ab000, "CGameCtnMediaBlockTransitionFade";
+    /// CGameCtnMediaBlockCameraGame.
+    MediaBlockCameraGame(game::media::MediaBlockCameraGame) = 0x03084000, "CGameCtnMediaBlockCameraGame";
+    /// CGameCtnMediaBlockTriangles.
+    MediaBlockTriangles(game::media::MediaBlockTriangles) = 0x03029000, "CGameCtnMediaBlockTriangles";
+    /// CGameCtnMediaBlockTriangles2D.
+    MediaBlockTriangles2D(game::media::MediaBlockTriangles2D) = 0x0304b000, "CGameCtnMediaBlockTriangles2D";
+    /// CGameCtnMediaBlockTriangles3D.
+    MediaBlockTriangles3D(game::media::MediaBlockTriangles3D) = 0x0304c000, "CGameCtnMediaBlockTriangles3D";
+    /// CGameCtnMediaBlockImage.
+    MediaBlockImage(game::media::MediaBlockImage) = 0x030a5000, "CGameCtnMediaBlockImage";
+    /// CGameCtnMediaBlockSound.
+    MediaBlockSound(game::media::MediaBlockSound) = 0x030a7000, "CGameCtnMediaBlockSound";
+    /// CGameCtnMediaBlockFxColors.
+    MediaBlockFxColors(game::media::MediaBlockFxColors) = 0x03080000, "CGameCtnMediaBlockFxColors";
+    /// CGameCtnMediaBlockFxBlurDepth.
+    MediaBlockFxBlurDepth(game::media::MediaBlockFxBlurDepth) = 0x03081000, "CGameCtnMediaBlockFxBlurDepth";
+    /// CGameCtnMediaBlockFxBloom.
+    MediaBlockFxBloom(game::media::MediaBlockFxBloom) = 0x03083000, "CGameCtnMediaBlockFxBloom";
+    /// CGameCtnMediaBlockFxBlurMotion.
+    MediaBlockFxBlurMotion(game::media::MediaBlockFxBlurMotion) = 0x03082000, "CGameCtnMediaBlockFxBlurMotion";
+    /// CGameCtnMediaBlockCameraPath.
+    MediaBlockCameraPath(game::media::MediaBlockCameraPath) = 0x030a1000, "CGameCtnMediaBlockCameraPath";
+    /// CGameCtnMediaBlockCameraEffectShake.
+    MediaBlockCameraEffectShake(game::media::MediaBlockCameraEffectShake) = 0x030a4000, "CGameCtnMediaBlockCameraEffectShake";
+    /// CControlEffectSimi.
+    ControlEffectSimi(game::media::ControlEffectSimi) = 0x07010000, "CControlEffectSimi";
+    /// CFuncKeys.
+    FuncKeys(game::media::FuncKeys) = 0x05002000, "CFuncKeys";
+    /// CFuncKeysReal.
+    FuncKeysReal(game::media::FuncKeysReal) = 0x0501a000, "CFuncKeysReal";
 }

@@ -8,6 +8,7 @@
 pub mod block;
 pub mod challenge;
 pub mod collector;
+pub mod media;
 
 use crate::archive::Archive;
 use crate::error::Result;
