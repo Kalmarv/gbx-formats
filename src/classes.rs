@@ -171,6 +171,22 @@ classes! {
     BlockInfoPylon(game::blockinfo::BlockInfoPylon) = 0x0305_5000, "CGameCtnBlockInfoPylon", parent 0x2400_5000;
     /// A block unit.
     BlockUnitInfo(game::blockinfo::BlockUnitInfo) = 0x0303_6000, "CGameCtnBlockUnitInfo", parent 0x0100_1000;
+    /// A mobil.
+    Mobil(game::scene::Mobil) = 0x0A01_1000, "CSceneMobil", parent 0x0A00_5000;
+    /// An item.
+    HmsItem(game::scene::HmsItem) = 0x0600_3000, "CHmsItem", parent 0x0100_1000;
+    /// A link from a mobil to a child object.
+    ObjectLink(game::scene::ObjectLink) = 0x0A01_4000, "CSceneObjectLink", parent 0x0100_1000;
+    /// A sound source in the scene.
+    SceneSoundSource(game::scene::SceneSoundSource) = 0x0A00_E000, "CSceneSoundSource", parent 0x0A00_9000;
+    /// A sound source.
+    HmsSoundSource(game::scene::HmsSoundSource) = 0x0600_D000, "CHmsSoundSource", parent 0x0600_B000;
+    /// A motion player.
+    MotionPlayer(game::scene::MotionPlayer) = 0x0803_4000, "CMotionPlayer", parent 0x0800_1000;
+    /// A motion command.
+    MotionCmdBase(game::scene::MotionCmdBase) = 0x0802_9000, "CMotionCmdBase", parent 0x0100_5000;
+    /// A shader track.
+    MotionShader(game::scene::MotionShader) = 0x0802_B000, "CMotionShader", parent 0x0803_3000;
     /// A solid.
     Solid(plug::solid::Solid) = 0x0900_5000, "CPlugSolid", parent 0x0902_B000;
 }

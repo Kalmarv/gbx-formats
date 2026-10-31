@@ -12,6 +12,7 @@ pub mod collector;
 pub mod ghost;
 pub mod media;
 pub mod parameters;
+pub mod scene;
 pub mod unlimiter;
 
 use crate::archive::Archive;

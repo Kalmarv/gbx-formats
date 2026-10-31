@@ -470,6 +470,14 @@ impl<'a, 's> Archive<'a, 's> {
         }
     }
 
+    /// A node stored in place, without a class id or an index (the game archives it with the class known from the
+    /// field): `read` reads its chunks. A pack file's reader makes the dummy write of `parent`, the id of the
+    /// node's parent class (see [`crate::classes`]), as it does at the start of every node.
+    pub(crate) fn direct<T>(&mut self, parent: u32, read: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        self.dummy_write(u32::to_le_bytes(parent));
+        read(self)
+    }
+
     /// A node reference (see the module documentation): `None` for -1. A new index reads its node into the table.
     pub(crate) fn node_ref(&mut self) -> Result<Option<NodeIndex>> {
         let at = self.here();
