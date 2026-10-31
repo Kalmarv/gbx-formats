@@ -1,0 +1,64 @@
+[package]
+name = "gbx-formats"
+description = "Read Nadeo's GameBox (.Gbx) files: the container, its LZO-compressed body, and TrackMania Nations Forever maps, with checked reads that never panic on untrusted bytes"
+keywords = ["trackmania", "gbx", "gamebox", "nadeo", "gamedev"]
+categories = ["parser-implementations", "game-development"]
+readme = "README.md"
+documentation = "https://docs.rs/gbx-formats"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dev-dependencies]
+primase-testdata.workspace = true
+serde_json.workspace = true
+
+[dependencies]
+primase-foundations = { workspace = true, features = ["compress"] }
+thiserror.workspace = true
+
+[lints]
+workspace = true
+
+[workspace]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Kalmarv/gbx-formats"
+publish = true
+
+[workspace.dependencies]
+primase-foundations = { version = "0.3.0", git = "https://github.com/Kalmarv/primase-foundations", rev = "446f659adb1e85d137749c6b2836c3b1e4f60613" }
+primase-testdata = { version = "0.1.6", git = "https://github.com/Kalmarv/primase-testdata", rev = "ab462184a11a4af845808ff49144ec921c222858" }
+thiserror = { version = "=2.0.21", default-features = false, features = ["std"] }
+serde_json = { version = "=1.0.154", default-features = false, features = ["std", "preserve_order", "float_roundtrip"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+float_cmp = "allow"
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+iter_over_hash_type = "deny"
+disallowed_methods = "allow"
+disallowed_types = "allow"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.test]
+opt-level = 1
