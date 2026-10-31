@@ -4,7 +4,8 @@
 //! Each class also names the id a pack file's reader writes as it starts one of its nodes (see [`crate::pak`]): its
 //! parent class's id as the game knew it when TrackMania Nations Forever's packs were made, which for most classes is
 //! the old id of the class it derives from (`CGameCtnMediaBlockText`, `0x030A8000`, derives from
-//! `CGameCtnMediaBlock`, whose old id is `0x2406A000`).
+//! `CGameCtnMediaBlock`, whose old id is `0x2406A000`). An unchunked archive that overrides the chunk reader uses
+//! `parent none`: it does not make that write.
 
 use crate::archive::Archive;
 use crate::error::{Error, Result};
@@ -13,7 +14,9 @@ use crate::node::Chunks;
 use crate::plug;
 
 macro_rules! classes {
-    ($($(#[$doc:meta])* $variant:ident($ty:path) = $id:literal, $name:literal, parent $parent:literal;)*) => {
+    (@write $r:ident, none) => {};
+    (@write $r:ident, $parent:literal) => { $r.dummy_write(u32::to_le_bytes($parent)); };
+    ($($(#[$doc:meta])* $variant:ident($ty:path) = $id:literal, $name:literal, parent $parent:tt;)*) => {
         /// A node of a class this crate reads.
         #[derive(Clone, Debug)]
         pub enum Node {
@@ -64,12 +67,12 @@ macro_rules! classes {
             }
         }
 
-        /// Reads a node of class `class` (its id read at `at`), starting with the dummy write a pack file's reader
-        /// makes for it: the id of its parent class.
+        /// Reads a node of class `class` (its id read at `at`), making the parent-class dummy write for chunked
+        /// nodes. An unchunked archive marked `parent none` reads without this write.
         pub(crate) fn read_node(r: &mut Archive<'_, '_>, class: u32, at: usize) -> Result<Node> {
             match class {
                 $($id => {
-                    r.dummy_write(u32::to_le_bytes($parent));
+                    classes!(@write r, $parent);
                     Ok(Node::$variant(Box::new(<$ty>::read(r)?)))
                 })*
                 _ => Err(Error::UnknownClass {
@@ -155,4 +158,114 @@ classes! {
     Surface(plug::surface::Surface) = 0x0900_C000, "CPlugSurface", parent 0x0902_B000;
     /// A collision geometry.
     SurfaceGeom(plug::surface::SurfaceGeom) = 0x0900_F000, "CPlugSurfaceGeom", parent 0x0902_B000;
+    /// A block.
+    BlockInfoClassic(game::blockinfo::BlockInfoClassic) = 0x0305_1000, "CGameCtnBlockInfoClassic", parent 0x2400_5000;
+    /// A block info for flat terrain.
+    BlockInfoFlat(game::blockinfo::BlockInfoFlat) = 0x0304_F000, "CGameCtnBlockInfoFlat", parent 0x2400_5000;
+    /// A block info for a rectangular asymmetric block.
+    BlockInfoRectAsym(game::blockinfo::BlockInfoRectAsym) = 0x0305_6000, "CGameCtnBlockInfoRectAsym", parent 0x2400_5000;
+    /// A road block info.
+    BlockInfoRoad(game::blockinfo::BlockInfoRoad) = 0x0305_2000, "CGameCtnBlockInfoRoad", parent 0x2400_5000;
+    /// A clip block info.
+    BlockInfoClip(game::blockinfo::BlockInfoClip) = 0x0305_3000, "CGameCtnBlockInfoClip", parent 0x2400_5000;
+    /// A frontier block info.
+    BlockInfoFrontier(game::blockinfo::BlockInfoFrontier) = 0x0305_0000, "CGameCtnBlockInfoFrontier", parent 0x2400_5000;
+    /// A pylon block info.
+    BlockInfoPylon(game::blockinfo::BlockInfoPylon) = 0x0305_5000, "CGameCtnBlockInfoPylon", parent 0x2400_5000;
+    /// A block unit.
+    BlockUnitInfo(game::blockinfo::BlockUnitInfo) = 0x0303_6000, "CGameCtnBlockUnitInfo", parent 0x0100_1000;
+    /// A mobil.
+    Mobil(game::scene::Mobil) = 0x0A01_1000, "CSceneMobil", parent 0x0A00_5000;
+    /// An item.
+    HmsItem(game::scene::HmsItem) = 0x0600_3000, "CHmsItem", parent 0x0100_1000;
+    /// A link from a mobil to a child object.
+    ObjectLink(game::scene::ObjectLink) = 0x0A01_4000, "CSceneObjectLink", parent 0x0100_1000;
+    /// A sound source in the scene.
+    SceneSoundSource(game::scene::SceneSoundSource) = 0x0A00_E000, "CSceneSoundSource", parent 0x0A00_9000;
+    /// A sound source.
+    HmsSoundSource(game::scene::HmsSoundSource) = 0x0600_D000, "CHmsSoundSource", parent 0x0600_B000;
+    /// A motion player.
+    MotionPlayer(game::scene::MotionPlayer) = 0x0803_4000, "CMotionPlayer", parent 0x0800_1000;
+    /// A motion command.
+    MotionCmdBase(game::scene::MotionCmdBase) = 0x0802_9000, "CMotionCmdBase", parent 0x0100_5000;
+    /// A shader track.
+    MotionShader(game::scene::MotionShader) = 0x0802_B000, "CMotionShader", parent 0x0803_3000;
+    /// A decoration.
+    Decoration(game::decoration::Decoration) = 0x0303_8000, "CGameCtnDecoration", parent 0x2400_A000;
+    /// The size of a decoration.
+    DecorationSize(game::decoration::DecorationSize) = 0x0303_B000, "CGameCtnDecorationSize", parent 0x0100_1000;
+    /// The mood of a decoration.
+    DecorationMood(game::decoration::DecorationMood) = 0x0303_A000, "CGameCtnDecorationMood", parent 0x0100_1000;
+    /// A terrain modifier of a decoration.
+    DecorationTerrainModifier(game::decoration::DecorationTerrainModifier) = 0x0303_C000, "CGameCtnDecorationTerrainModifier", parent 0x0100_1000;
+    /// The audio of a decoration.
+    DecorationAudio(game::decoration::DecorationAudio) = 0x0303_9000, "CGameCtnDecorationAudio", parent 0x0100_1000;
+    /// A flat zone.
+    ZoneFlat(game::collection::ZoneFlat) = 0x0305_D000, "CGameCtnZoneFlat", parent 0x2401_C000;
+    /// A frontier zone.
+    ZoneFrontier(game::collection::ZoneFrontier) = 0x0305_E000, "CGameCtnZoneFrontier", parent 0x2401_C000;
+    /// A collection.
+    Collection(game::collection::Collection) = 0x0303_3000, "CGameCtnCollection", parent 0x0100_1000;
+    /// A scene tree holding a light.
+    TreeLight(plug::tree::TreeLight) = 0x0906_2000, "CPlugTreeLight", parent 0x0904_F000;
+    /// A sprite mesh.
+    VisualSprite(plug::visual::VisualSprite) = 0x0901_0000, "CPlugVisualSprite", parent 0x0902_C000;
+    /// A mesh of 2D quads.
+    VisualQuads2D(plug::visual::VisualQuads2D) = 0x0904_B000, "CPlugVisualQuads2D", parent 0x0904_A000;
+    /// A function of a sub-visual sequence.
+    FuncTreeSubVisualSequence(plug::func_tree::TreeSubVisualSequence) = 0x0503_1000, "CFuncTreeSubVisualSequence", parent 0x0501_C000;
+    /// Keys of natural numbers.
+    FuncKeysNatural(plug::func_tree::KeysNatural) = 0x0503_0000, "CFuncKeysNatural", parent 0x0500_2000;
+    /// The decoration of a tree of a solid.
+    DecoratorTree(plug::decorator::DecoratorTree) = 0x090A_2000, "CPlugDecoratorTree", parent 0x0100_1000;
+    /// The decorations of a solid.
+    DecoratorSolid(plug::decorator::DecoratorSolid) = 0x090A_3000, "CPlugDecoratorSolid", parent 0x0100_1000;
+    /// A solid.
+    Solid(plug::solid::Solid) = 0x0900_5000, "CPlugSolid", parent 0x0902_B000;
+    /// CPlugBitmap.
+    TextureBitmap(plug::bitmap::TextureBitmap) = 0x09011000, "CPlugBitmap", parent 0x0902b000;
+    /// CPlugBitmapApply.
+    BitmapApply(plug::bitmap::BitmapApply) = 0x09012000, "CPlugBitmapApply", parent 0x09047000;
+    /// CPlugBitmapRenderWater.
+    BitmapRenderWater(plug::bitmap::BitmapRenderWater) = 0x09087000, "CPlugBitmapRenderWater", parent 0x09086000;
+    /// CPlugBitmapRenderOverlay.
+    BitmapRenderOverlay(plug::bitmap::BitmapRenderOverlay) = 0x0909e000, "CPlugBitmapRenderOverlay", parent 0x09086000;
+    /// CPlugBitmapRenderLightOcc.
+    BitmapRenderLightOcc(plug::bitmap::BitmapRenderLightOcc) = 0x0909f000, "CPlugBitmapRenderLightOcc", parent 0x09086000;
+    /// CPlugBitmapRenderCamera.
+    BitmapRenderCamera(plug::bitmap::BitmapRenderCamera) = 0x09089000, "CPlugBitmapRenderCamera", parent 0x09086000;
+    /// CPlugBitmapRenderSub.
+    BitmapRenderSub(plug::bitmap::BitmapRenderSub) = 0x09091000, "CPlugBitmapRenderSub", parent 0x09086000;
+    /// CPlugBitmapRenderHemisphere.
+    BitmapRenderHemisphere(plug::bitmap::BitmapRenderHemisphere) = 0x09058000, "CPlugBitmapRenderHemisphere", parent 0x09086000;
+    /// CPlugBitmapRenderLightFromMap.
+    BitmapRenderLightFromMap(plug::bitmap::BitmapRenderLightFromMap) = 0x09021000, "CPlugBitmapRenderLightFromMap", parent 0x09086000;
+    /// CPlugShaderApply.
+    ShaderApply(plug::shader::ShaderApply) = 0x09026000, "CPlugShaderApply", parent 0x09004000;
+    /// CPlugShaderPass.
+    ShaderPass(plug::shader::ShaderPass) = 0x09067000, "CPlugShaderPass", parent 0x0902b000;
+    /// CFuncShaderLayerUV.
+    FuncShaderLayerUv(plug::func_shader::FuncShaderLayerUv) = 0x05015000, "CFuncShaderLayerUV", parent 0x05011000;
+    /// CFuncShaders.
+    FuncShaders(plug::func_shader::FuncShaders) = 0x05014000, "CFuncShaders", parent 0x05011000;
+    /// GxLightBall.
+    LightBall(plug::light::LightBall) = 0x04002000, "GxLightBall", parent 0x04003000;
+    /// GxLightSpot.
+    LightSpot(plug::light::LightSpot) = 0x0400b000, "GxLightSpot", parent 0x04002000;
+    /// GxLightFrustum.
+    LightFrustum(plug::light::LightFrustum) = 0x0400a000, "GxLightFrustum", parent 0x04002000;
+    /// GxLightDirectional.
+    LightDirectional(plug::light::LightDirectional) = 0x04007000, "GxLightDirectional", parent 0x04006000;
+    /// CPlugLight.
+    Light(plug::light::Light) = 0x0901d000, "CPlugLight", parent 0x0902b000;
+    /// CHmsLight.
+    HmsLight(plug::light::HmsLight) = 0x0600c000, "CHmsLight", parent 0x0600b000;
+    /// CSceneLight.
+    SceneLight(plug::light::SceneLight) = 0x0a00b000, "CSceneLight", parent 0x0a009000;
+    /// CHmsLightMapMood.
+    HmsLightMapMood(plug::light::HmsLightMapMood) = 0x06023000, "CHmsLightMapMood", parent 0x01001000;
+    /// CHmsLightMap.
+    HmsLightMap(plug::light::HmsLightMap) = 0x06021000, "CHmsLightMap", parent 0x01001000;
+    /// CPlugFileGen overrides the chunk archive; GBX.NET makes no class write (also absent from writes.tsv).
+    FileGenerator(plug::bitmap::FileGenerator) = 0x0902_F000, "CPlugFileGen", parent none;
 }

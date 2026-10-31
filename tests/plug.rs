@@ -10,7 +10,9 @@
 use gbx_formats::plug::material::{Bitmap, Material, MaterialCustom, SkipSampler};
 use gbx_formats::plug::surface::{CollisionMesh, Surf, SurfMaterial, Surface, SurfaceGeom};
 use gbx_formats::plug::tree::{FLAG_LOCATION, MipLevel, Tree, TreeVisualMip};
-use gbx_formats::plug::visual::VisualIndexedTriangles;
+use gbx_formats::plug::visual::{
+    VertexColors, VertexNormals, Vertices, VisualIndexedTriangles, unpack_color, unpack_normal,
+};
 use gbx_formats::plug::{BoxAligned, Iso4};
 use gbx_formats::{Gbx, Id, NodeIndex, Nodes};
 
@@ -43,6 +45,19 @@ fn string(out: &mut Vec<u8>, s: &str) {
 /// - 4: a surface with the geometry 8;
 /// - 9: a tree with levels of detail: node 1 up to 128 units.
 fn body() -> Vec<u8> {
+    let mut vertices = Vec::new();
+    for v in 0..3u32 {
+        let v = v as f32;
+        f32s(&mut vertices, &[v, v + 1.0, v + 2.0]); // position
+        f32s(&mut vertices, &[0.0, 1.0, 0.0]); // normal
+        f32s(&mut vertices, &[1.0, 0.5, 0.25, 1.0]); // color
+    }
+    body_with(0x78, &vertices, &[0, 0])
+}
+
+/// [`body`] with other geometry flags, the bytes of the three vertices and the words after them (the tangents and
+/// the bitangents).
+fn body_with(flags: u32, vertices: &[u8], tangents: &[u32]) -> Vec<u8> {
     let mut b = Vec::new();
     // node 0: CPlugTree
     u32s(&mut b, &[0x0904_F006, 10, 2]);
@@ -63,19 +78,14 @@ fn body() -> Vec<u8> {
     u32s(&mut b, &[0x0900_600B, 1, 0, 0]);
     f32s(&mut b, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     // the geometry: flags 0x78, one UV channel, three vertices, no streams, UV version 0
-    u32s(&mut b, &[0x0900_600E, 0x78, 1, 3, 0, 0]);
+    u32s(&mut b, &[0x0900_600E, flags, 1, 3, 0, 0]);
     f32s(&mut b, &[0.0, 1.0, 0.5, 0.25, 1.0, 0.0]);
     f32s(&mut b, &[1.0, 1.0, 1.0, 0.5, 0.5, 0.5]); // the bounding box
     u32s(&mut b, &[1, 7]); // one bitmap element to pack: mapper 7
     f32s(&mut b, &[2.0, 3.0, 4.0, 5.0]);
     u32s(&mut b, &[0x0902_C002, u32::MAX, 0x0902_C004]);
-    for v in 0..3u32 {
-        let v = v as f32;
-        f32s(&mut b, &[v, v + 1.0, v + 2.0]); // position
-        f32s(&mut b, &[0.0, 1.0, 0.0]); // normal
-        f32s(&mut b, &[1.0, 0.5, 0.25, 1.0]); // color
-    }
-    u32s(&mut b, &[0, 0]); // no tangents, no bitangents
+    b.extend_from_slice(vertices);
+    u32s(&mut b, tangents);
     // the index buffer, in place after a bool
     u32s(&mut b, &[0x0906_A001, 1, 0x0905_7000, 2, 3]);
     for i in [0u16, 2, 1] {
@@ -271,8 +281,11 @@ fn a_hand_built_scene_reads() {
     assert_eq!(g.bitmap_elem_to_packs[0].translation, [4.0, 5.0]);
     let vs = visual.visual_3d.vertices.as_ref().unwrap();
     assert_eq!(vs.positions, [[0.0, 1.0, 2.0], [1.0, 2.0, 3.0], [2.0, 3.0, 4.0]]);
-    assert_eq!(vs.normals, [[0.0, 1.0, 0.0]; 3]);
-    assert_eq!(vs.colors, [[1.0, 0.5, 0.25, 1.0]; 3]);
+    assert_eq!(vs.normals, Some(VertexNormals::Floats(vec![[0.0, 1.0, 0.0]; 3])));
+    assert_eq!(
+        vs.colors,
+        Some(VertexColors::Floats(vec![[1.0, 0.5, 0.25, 1.0]; 3]))
+    );
     assert_eq!(visual.visual_3d.blend_shapes, Some(None));
     let ib = visual.indexed.index_buffer.as_ref().unwrap();
     assert_eq!((ib.flags, &ib.indices[..]), (Some(2), &[0, 2, 1][..]));
@@ -380,6 +393,55 @@ fn patched(from: &[u32], to: &[u32]) -> Vec<u8> {
     [&b[..at], &put[..], &b[at + find.len()..]].concat()
 }
 
+/// The mesh of [`body_with`], read.
+fn mesh(flags: u32, vertices: &[u8], tangents: &[u32]) -> Result<Vertices, String> {
+    let bytes = body_with(flags, vertices, tangents);
+    let nodes = read(&bytes).map_err(|e| e.to_string())?;
+    let visual: &VisualIndexedTriangles = get(&nodes, 2);
+    Ok(visual.visual_3d.vertices.clone().expect("vertices"))
+}
+
+#[test]
+fn packed_vertex_attributes() {
+    // flags 0x3B8: static, explicit attributes, normals (packed) and no colors
+    let mut v = Vec::new();
+    for (i, normal) in [0x1u32, 0x3FF, 0x2010_0201].into_iter().enumerate() {
+        f32s(&mut v, &[i as f32, 0.0, 0.0]);
+        u32s(&mut v, &[normal]);
+    }
+    let vs = mesh(0x3B8, &v, &[0, 0]).expect("packed normals");
+    assert_eq!(vs.positions[2], [2.0, 0.0, 0.0]);
+    assert_eq!(
+        vs.normals,
+        Some(VertexNormals::Packed(vec![1, 0x3FF, 0x2010_0201]))
+    );
+    assert_eq!(vs.colors, None);
+    assert_eq!(unpack_normal(0x1FF), [1.0, 0.0, 0.0]);
+    assert_eq!(unpack_normal(0x3FF), [-1.0 / 511.0, 0.0, 0.0]);
+    assert_eq!(unpack_normal(511 << 10), [0.0, 1.0, 0.0]);
+    assert_eq!(unpack_normal(511 << 20), [0.0, 0.0, 1.0]);
+    // flags 0x1F8 without bit 9: both stored, normals and colors packed
+    let mut v = Vec::new();
+    for i in 0..3u32 {
+        f32s(&mut v, &[i as f32, 0.0, 0.0]);
+        u32s(&mut v, &[0x1FF, 0x8040_20FF]);
+    }
+    let vs = mesh(0x1F8, &v, &[3, 1, 2, 3, 0]).expect("packed attributes");
+    assert_eq!(vs.colors, Some(VertexColors::Packed(vec![0x8040_20FF; 3])));
+    assert_eq!(
+        unpack_color(0x8040_20FF),
+        [64.0 / 255.0, 32.0 / 255.0, 1.0, 128.0 / 255.0]
+    );
+    // explicit attributes with only colors, as floats
+    let mut v = Vec::new();
+    for i in 0..3u32 {
+        f32s(&mut v, &[i as f32, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]);
+    }
+    let vs = mesh(0x258, &v, &[0, 0]).expect("colors only");
+    assert_eq!(vs.normals, None);
+    assert_eq!(vs.colors, Some(VertexColors::Floats(vec![[1.0; 4]; 3])));
+}
+
 #[test]
 fn refusals() {
     // every truncation of the body
@@ -401,14 +463,10 @@ fn refusals() {
         patched(&[0x0900_600E, 0x78, 1, 3, 0, 0], &[0x0900_600E, 0x78, 1, 3, 0, 1]),
         "UV channel version 1",
     );
-    // a skinned mesh, packed vertex attributes, flags above bit 9
+    // a skinned mesh, flags above bit 9
     refused(
         patched(&[0x0900_600E, 0x78], &[0x0900_600E, 0x79]),
         "skinned visuals are not read",
-    );
-    refused(
-        patched(&[0x0900_600E, 0x78], &[0x0900_600E, 0xF8]),
-        "packed vertex attributes",
     );
     refused(
         patched(&[0x0900_600E, 0x78], &[0x0900_600E, 0x478]),
@@ -419,10 +477,13 @@ fn refusals() {
         patched(&[0x0900_600E, 0x78, 1, 3], &[0x0900_600E, 0x78, 1, 3_000_000]),
         "do not fit",
     );
-    // a material that stores its device materials inline instead of naming a shader
+    // an inline device material with an invalid boolean
     refused(
-        patched(&[0x0907_900D, 6], &[0x0907_900D, u32::MAX]),
-        "inline device materials",
+        patched(
+            &[0x0907_900D, 6],
+            &[0x0907_900D, u32::MAX, 1, 0, 2, u32::MAX, u32::MAX, u32::MAX, 0],
+        ),
+        "bool 2",
     );
     // a collision shape other than a mesh, and a mesh or an octree of another version
     refused(patched(&[7, 3, 3], &[8, 3, 3]), "collision shape type 8");

@@ -145,9 +145,19 @@ pub struct CollisionMesh {
 }
 
 /// A collision shape (`CPlugSurface.ISurf`), by the type id stored before it. Of the shapes the engine has, only
-/// meshes occur in the files read.
+/// these occur in the files read; a surface geometry stores them in the version without a surface index.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Surf {
+    /// Type 1: an ellipsoid, named by three floats (`Size` in GBX.NET).
+    Ellipsoid {
+        /// The floats stored.
+        size: [f32; 3],
+    },
+    /// Type 6: a box, stored like the bounding box (`Transform` in GBX.NET).
+    Box {
+        /// The box.
+        bounds: BoxAligned,
+    },
     /// Type 7: a triangle mesh.
     Mesh(CollisionMesh),
 }
@@ -243,11 +253,17 @@ fn surf(r: &mut Archive<'_, '_>) -> Result<Option<Surf>> {
     let at = r.here();
     Ok(Some(match r.i32()? {
         -1 => return Ok(None),
+        1 => Surf::Ellipsoid { size: r.vec3()? },
+        6 => Surf::Box {
+            bounds: box_aligned(r)?,
+        },
         7 => Surf::Mesh(mesh(r)?),
         other => {
             return Err(r.bad_at(
                 at,
-                format!("collision shape type {other}: only meshes (7) are read"),
+                format!(
+                    "collision shape type {other}: only ellipsoids (1), boxes (6) and meshes (7) are read"
+                ),
             ));
         }
     }))
@@ -260,7 +276,10 @@ impl SurfaceGeom {
             match id {
                 0x0900_F004 => {
                     n.u01 = Some(r.id()?);
-                    n.bounding_box = Some(box_aligned(r)?);
+                    let bounds = box_aligned(r)?;
+                    // a pack file's reader folds the first float of the box minus the fourth into the cipher here
+                    r.dummy_write(f32::to_le_bytes(bounds.center[0] - bounds.half_size[0]));
+                    n.bounding_box = Some(bounds);
                     n.surf = surf(r)?;
                     n.surface_id = Some(r.i16()?);
                 }
