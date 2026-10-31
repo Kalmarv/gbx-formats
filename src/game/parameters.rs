@@ -1,0 +1,602 @@
+//! The TMUnlimiter parameter functions (`ParameterName` in GBX.NET) and the kind of value each carries. Generated
+//! from the enum and the switch of GBX.NET 2.5.0's `CGameCtnChallenge.TMUnlimiter.cs`: a function is its index in
+//! [`NAMES`].
+#![deny(
+    clippy::arithmetic_side_effects,
+    clippy::indexing_slicing,
+    clippy::cast_possible_truncation
+)]
+
+/// What a parameter's value is, as TMUnlimiter 2.x map files (chunk `0x3F001003` version 7) store it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueKind {
+    /// A function with no value beyond its operation.
+    None,
+    /// An `f32`.
+    Float,
+    /// A string.
+    String,
+    /// An `f32` to multiply by, or an inline `CFuncKeysReal` node.
+    KeysReal,
+    /// An `f32` to multiply by, or a `u32`.
+    Natural,
+    /// An `f32` to multiply by, or a list of `f32`.
+    FastBufferReal,
+    /// A byte that is 0 or 1.
+    Bool,
+}
+
+/// The function with this index, if the enum has one.
+pub fn name(function: u32) -> Option<&'static str> {
+    usize::try_from(function).ok().and_then(|i| NAMES.get(i)).copied()
+}
+
+/// The kind of value the function carries; `None` when the function is not in the enum.
+pub fn kind(function: u32) -> Option<ValueKind> {
+    name(function)?;
+    Some(match function {
+        0..=8
+        | 10..=11
+        | 13..=15
+        | 17..=19
+        | 21..=28
+        | 58
+        | 63..=71
+        | 75..=83
+        | 85..=110
+        | 112..=116
+        | 118
+        | 120..=123
+        | 125..=129
+        | 131
+        | 133..=135
+        | 138..=140
+        | 145
+        | 147
+        | 150
+        | 152..=161
+        | 163
+        | 165..=166
+        | 168
+        | 170..=177
+        | 179..=180
+        | 182..=188
+        | 190..=191
+        | 193
+        | 197..=200
+        | 202..=210
+        | 214..=215
+        | 218
+        | 220..=229
+        | 231..=234
+        | 236..=237
+        | 239
+        | 242
+        | 244..=245
+        | 247..=249
+        | 252..=253
+        | 255..=258
+        | 453
+        | 456 => ValueKind::Float,
+        56..=57 | 59..=62 | 458..=459 => ValueKind::String,
+        9
+        | 12
+        | 16
+        | 20
+        | 72
+        | 74
+        | 84
+        | 119
+        | 124
+        | 130
+        | 132
+        | 136..=137
+        | 146
+        | 148..=149
+        | 164
+        | 167
+        | 169
+        | 178
+        | 194
+        | 212
+        | 216..=217
+        | 238
+        | 246
+        | 250..=251
+        | 254 => ValueKind::KeysReal,
+        73 | 111 | 141..=144 | 151 | 162 | 211 | 219 | 230 | 235 | 240..=241 | 243 | 457 => {
+            ValueKind::Natural
+        }
+        181 | 189 | 192 | 195..=196 | 201 => ValueKind::FastBufferReal,
+        117 | 213 => ValueKind::Bool,
+        _ => ValueKind::None,
+    })
+}
+
+/// Whether the legacy (version 6) layout stores the function's value as a string.
+pub(crate) fn legacy_is_string(function: u32) -> bool {
+    matches!(
+        name(function),
+        Some(
+            "World_ExecuteParameterSet"
+                | "World_ExecuteScript"
+                | "World_BlockGroupMakeVisible"
+                | "World_BlockGroupMakeInvisible"
+                | "World_BlockGroupMakeCollidable"
+                | "World_BlockGroupMakeNonCollidable"
+                | "Vehicle_Transform"
+                | "Vehicle_SetVehicleTuningByName"
+        )
+    )
+}
+
+/// The functions, in the enum's order.
+pub const NAMES: &[&str] = &[
+    "Vehicle_GravityGround",
+    "Vehicle_GravityAir",
+    "Vehicle_SpeedClamp",
+    "Vehicle_MaxSpeedForward",
+    "Vehicle_MaxSpeedBackward",
+    "Vehicle_YellowBoostMultiplier",
+    "Vehicle_RedBoostMultiplier",
+    "Vehicle_YellowBoostDuration",
+    "Vehicle_RedBoostDuration",
+    "Vehicle_AccelerationCurve",
+    "Vehicle_BrakeMax",
+    "Vehicle_LinearFluidFrictionMultiplier",
+    "Vehicle_SteerDriveTorque",
+    "Vehicle_SlopeSpeedGainLimit",
+    "Vehicle_BodyFrictionWithConcreteMultiplier",
+    "Vehicle_BodyFrictionWithMetalMultiplier",
+    "Vehicle_MaxSideFriction",
+    "Vehicle_GroundSlowDownBaseValue",
+    "Vehicle_GroundSlowDownMultiplier",
+    "Vehicle_BrakeMaxDynamic",
+    "Vehicle_WaterReboundFromSpeedRatio",
+    "Vehicle_AngularFluidFrictionFirstMultiplier",
+    "Vehicle_AngularFluidFrictionSecondMultiplier",
+    "Vehicle_Scale",
+    "Vehicle_EnginePitch",
+    "Vehicle_EngineVolume",
+    "Vehicle_AddLinearSpeedX",
+    "Vehicle_AddLinearSpeedY",
+    "Vehicle_AddLinearSpeedZ",
+    "Reset_Everything",
+    "Reset_GravityGround",
+    "Reset_GravityAir",
+    "Reset_SpeedClamp",
+    "Reset_MaxSpeedForward",
+    "Reset_MaxSpeedBackward",
+    "Reset_YellowBoostMultiplier",
+    "Reset_RedBoostMultiplier",
+    "Reset_YellowBoostDuration",
+    "Reset_RedBoostDuration",
+    "Reset_AccelerationCurve",
+    "Reset_BrakeMax",
+    "Reset_LinearFluidFrictionMultiplier",
+    "Reset_SteerDriveTorque",
+    "Reset_SlopeSpeedGainLimit",
+    "Reset_BodyFrictionWithConcreteMultiplier",
+    "Reset_BodyFrictionWithMetalMultiplier",
+    "Reset_MaxSideFriction",
+    "Reset_GroundSlowDownBaseValue",
+    "Reset_GroundSlowDownMultiplier",
+    "Reset_BrakeMaxDynamic",
+    "Reset_WaterReboundFromSpeedRatio",
+    "Reset_AngularFluidFrictionFirstMultiplier",
+    "Reset_AngularFluidFrictionSecondMultiplier",
+    "Reset_Scale",
+    "Reset_EnginePitch",
+    "Reset_EngineVolume",
+    "World_ExecuteParameterSet",
+    "World_ExecuteScript",
+    "World_DisplayMediaTrackerClip",
+    "World_BlockGroupMakeVisible",
+    "World_BlockGroupMakeInvisible",
+    "World_BlockGroupMakeCollidable",
+    "World_BlockGroupMakeNonCollidable",
+    "World_SetGravityForceX",
+    "World_SetGravityForceY",
+    "World_SetGravityForceZ",
+    "Vehicle_AbsorbTension",
+    "Vehicle_AbsorbingValKa",
+    "Vehicle_AbsorbingValKi",
+    "Vehicle_AbsorbingValMax",
+    "Vehicle_AbsorbingValMin",
+    "Vehicle_AbsorbingValRest",
+    "Vehicle_AccelCurveRearGear",
+    "Vehicle_AirControlDuration",
+    "Vehicle_AirControlZCoefFromAngularSpeed",
+    "Vehicle_AngularSpeedClamp",
+    "Vehicle_AngularSpeedImpulseScale",
+    "Vehicle_AngularSpeedYImpulseBlend",
+    "Vehicle_AxialSlopeAdherenceMax",
+    "Vehicle_AxialSlopeAdherenceMin",
+    "Vehicle_BodyRestCoefConcrete",
+    "Vehicle_BodyRestCoefMetal",
+    "Vehicle_BrakeBase",
+    "Vehicle_BrakeCoef",
+    "Vehicle_BrakeHeatSpeedFromFBrake",
+    "Vehicle_CMAftFore",
+    "Vehicle_CMDownUp",
+    "Vehicle_DebugAbsorbCoef",
+    "Vehicle_Field0x18",
+    "Vehicle_Field0x1c",
+    "Vehicle_Field0x1d8",
+    "Vehicle_Field0x20",
+    "Vehicle_Field0x28",
+    "Vehicle_Field0x33c",
+    "Vehicle_Field0x340",
+    "Vehicle_Field0x344",
+    "Vehicle_Field0x348",
+    "Vehicle_Field0x34c",
+    "Vehicle_Field0x358",
+    "Vehicle_Field0x35c",
+    "Vehicle_Field0x360",
+    "Vehicle_Field0x384",
+    "Vehicle_Field0x38",
+    "Vehicle_Field0x398",
+    "Vehicle_Field0x39c",
+    "Vehicle_Field0x3a0",
+    "Vehicle_Field0x3a4",
+    "Vehicle_Field0x3a8",
+    "Vehicle_Field0x3c",
+    "Vehicle_Field0x50",
+    "Vehicle_Field0x54",
+    "Vehicle_GearCount",
+    "Vehicle_GlidingGravityCoef",
+    "Vehicle_InertiaHalfDiagX",
+    "Vehicle_InertiaHalfDiagY",
+    "Vehicle_InertiaHalfDiagZ",
+    "Vehicle_InertiaMass",
+    "Vehicle_IsFakeEngine",
+    "Vehicle_JumpImpulseVal",
+    "Vehicle_LateralContactSlowDown",
+    "Vehicle_LateralSlopeAdherenceMax",
+    "Vehicle_LateralSlopeAdherenceMin",
+    "Vehicle_LimitToMaxSpeedForce",
+    "Vehicle_LinearSpeed2PositiveDeltaMax",
+    "Vehicle_M4AccelFromSlipAngle",
+    "Vehicle_M4LateralFrictionForce",
+    "Vehicle_M4LateralFrictionSquareForce",
+    "Vehicle_M4LateralFrictionSquareTorque",
+    "Vehicle_M4LateralFrictionTorque",
+    "Vehicle_M4LeaveSplippingSpeed",
+    "Vehicle_M4MaxFrictionForceFromSpeed",
+    "Vehicle_M4MaxFrictionForceWhenSlippingCoef",
+    "Vehicle_M4MaxFrictionTorqueFromSpeed",
+    "Vehicle_M4MaxFrictionTorqueWhenSlippingCoef",
+    "Vehicle_M4SlipAngleSpeed",
+    "Vehicle_M4SteerAngleWhenSlippingMax",
+    "Vehicle_M4SteerRadiusCoefFromSlipAngle",
+    "Vehicle_M4SteerRadiusFromSpeed",
+    "Vehicle_M4SteerRadiusWhenSlippingCoef",
+    "Vehicle_M4SteerTorqueCoef",
+    "Vehicle_M5AccelSlipCoefMax",
+    "Vehicle_M5KeepNoSteerSlowDownWhenSlippingDuration",
+    "Vehicle_M5KeepSlidingAccelDurarion",
+    "Vehicle_M5KeepSteerSlowDownDurarion",
+    "Vehicle_M5LateralContactSlowDownDuration",
+    "Vehicle_M5MaxAxialRolloverTorque",
+    "Vehicle_M5SlippingAccelCurve",
+    "Vehicle_M5SlippingAccelCurveCoef",
+    "Vehicle_M5SmoothInputSteerDurationFromSpeed",
+    "Vehicle_M5SteerCoefFromSpeed",
+    "Vehicle_M6AfterBurnoutAccMod",
+    "Vehicle_M6AfterBurnoutDuration",
+    "Vehicle_M6AfterBurnoutImpulse",
+    "Vehicle_M6AirRpmAcc",
+    "Vehicle_M6AirRpmDeadening",
+    "Vehicle_M6BrakeMaxDynamicRear",
+    "Vehicle_M6BrakeMaxRear",
+    "Vehicle_M6BrakeModulationWhenSlipping",
+    "Vehicle_M6BrakeSmokeIntensity",
+    "Vehicle_M6BurnoutAccMod",
+    "Vehicle_M6BurnoutCenterForceCoeff2",
+    "Vehicle_M6BurnoutCenterForceCoeff",
+    "Vehicle_M6BurnoutDuration",
+    "Vehicle_M6BurnoutFricMod",
+    "Vehicle_M6BurnoutLateralSpeed",
+    "Vehicle_M6BurnoutLateralSpeedCoeff",
+    "Vehicle_M6BurnoutLateralSpeedMax",
+    "Vehicle_M6BurnoutRadius",
+    "Vehicle_M6BurnoutRadiusMax",
+    "Vehicle_M6BurnoutRolloverFromSpeed",
+    "Vehicle_M6BurnoutRpmAcc",
+    "Vehicle_M6BurnoutSmokeIntensity",
+    "Vehicle_M6BurnoutSmokeVelocity",
+    "Vehicle_M6BurnoutSteerCoeff2",
+    "Vehicle_M6BurnoutSteerCoeff3",
+    "Vehicle_M6BurnoutSteerCoeff4",
+    "Vehicle_M6BurnoutSteerCoeff",
+    "Vehicle_M6BurnoutWheelAngularRotation",
+    "Vehicle_M6DonutRolloverFromSpeed",
+    "Vehicle_M6ForceEpsilon",
+    "Vehicle_M6FrictionModulationWhenSlipNBrake",
+    "Vehicle_M6GearRatio",
+    "Vehicle_M6InertialMass",
+    "Vehicle_M6InertialTorqueModulationX",
+    "Vehicle_M6InertialTorqueModulationZ",
+    "Vehicle_M6MaxDiffBtwGroundNormal",
+    "Vehicle_M6MaxDiffBtwnPropulsionAndSpeed",
+    "Vehicle_M6MaxNegAngle4Burnout",
+    "Vehicle_M6MaxPosAngle4Burnout",
+    "Vehicle_M6MaxRPM",
+    "Vehicle_M6MaxRpm",
+    "Vehicle_M6MaxSpeed4Burnout",
+    "Vehicle_M6MinRPM",
+    "Vehicle_M6MinSpeed4Burnout",
+    "Vehicle_M6RolloverLateralFromSpeedRatio",
+    "Vehicle_M6RpmComputedOnGearDown",
+    "Vehicle_M6RpmDelta",
+    "Vehicle_M6RpmGainCoefOnGearDown",
+    "Vehicle_M6RpmGainOnTakeOff",
+    "Vehicle_M6RpmLossCoefOnGearUp",
+    "Vehicle_M6RpmLossOnTakeOffFinished",
+    "Vehicle_M6RpmWantedOnGearUp",
+    "Vehicle_M6SpeedLimitNegForTakeOffFront",
+    "Vehicle_M6SpeedLimitNegForTakeOffRear",
+    "Vehicle_M6SpeedLimitPositiveForTakeOffFront",
+    "Vehicle_M6SpeedLimitPositiveForTakeOffRear",
+    "Vehicle_Mass",
+    "Vehicle_MaxAngularSpeedYAirControl",
+    "Vehicle_MaxDistPerStep",
+    "Vehicle_MaxSideFrictionBlendCoef",
+    "Vehicle_MaxSideFrictionSliding",
+    "Vehicle_MinGear",
+    "Vehicle_ModulationFromWheelCompression",
+    "Vehicle_NoSteerSlowDownWhenSlipping",
+    "Vehicle_RelSpeedMultCoef",
+    "Vehicle_RolloverAxial",
+    "Vehicle_RolloverLateral",
+    "Vehicle_RolloverLateralFromAngle",
+    "Vehicle_RubberBallElasticity",
+    "Vehicle_ShockModel",
+    "Vehicle_SideFriction1",
+    "Vehicle_SideFriction2",
+    "Vehicle_SlipAngleForceCoef1",
+    "Vehicle_SlipAngleForceCoef2",
+    "Vehicle_SlipAngleForceMax",
+    "Vehicle_SoundEngineVolume",
+    "Vehicle_SoundImpactVolume",
+    "Vehicle_SoundSkidConcreteVolume",
+    "Vehicle_SoundSkidSandVolume",
+    "Vehicle_SteerAngleMax",
+    "Vehicle_SteerDurationBeforeSteerSlowDown",
+    "Vehicle_SteerGroundTorque",
+    "Vehicle_SteerGroundTorqueSlippingCoef",
+    "Vehicle_SteerLowSpeed",
+    "Vehicle_SteerMaxBlend",
+    "Vehicle_SteerModel",
+    "Vehicle_SteerRadiusCoef",
+    "Vehicle_SteerRadiusMin",
+    "Vehicle_SteerSlowDown",
+    "Vehicle_SteerSlowDownCoef",
+    "Vehicle_SteerSlowDownFadeInDuration",
+    "Vehicle_SteerSlowDownFadeOutDuration",
+    "Vehicle_SteerSpeed",
+    "Vehicle_TireMaterial",
+    "Vehicle_TwistAngle",
+    "Vehicle_VibrationPeriodSpeedCoef",
+    "Vehicle_VisualSteerAngleFromSpeed",
+    "Vehicle_WaterAngularFriction",
+    "Vehicle_WaterAngularFrictionSq",
+    "Vehicle_WaterBumpMinSpeed",
+    "Vehicle_WaterBumpSlowDownFromSpeedRatio",
+    "Vehicle_WaterFrictionFromSpeed",
+    "Vehicle_WaterGravity",
+    "Vehicle_WaterReboundMinHSpeed",
+    "Vehicle_WaterSplashFromSpeed",
+    "Vehicle_WheelFrictionCoefConcrete",
+    "Vehicle_WheelFrictionCoefMetal",
+    "Vehicle_WheelRestCoefConcrete",
+    "Vehicle_WheelRestCoefMetal",
+    "Reset_GravityForce",
+    "Reset_AbsorbTension",
+    "Reset_AbsorbingValKa",
+    "Reset_AbsorbingValKi",
+    "Reset_AbsorbingValMax",
+    "Reset_AbsorbingValMin",
+    "Reset_AbsorbingValRest",
+    "Reset_AccelCurveRearGear",
+    "Reset_AirControlDuration",
+    "Reset_AirControlZCoefFromAngularSpeed",
+    "Reset_AngularSpeedClamp",
+    "Reset_AngularSpeedImpulseScale",
+    "Reset_AngularSpeedYImpulseBlend",
+    "Reset_AxialSlopeAdherenceMax",
+    "Reset_AxialSlopeAdherenceMin",
+    "Reset_BodyRestCoefConcrete",
+    "Reset_BodyRestCoefMetal",
+    "Reset_BrakeBase",
+    "Reset_BrakeCoef",
+    "Reset_BrakeHeatSpeedFromFBrake",
+    "Reset_CMAftFore",
+    "Reset_CMDownUp",
+    "Reset_DebugAbsorbCoef",
+    "Reset_Field0x18",
+    "Reset_Field0x1c",
+    "Reset_Field0x1d8",
+    "Reset_Field0x20",
+    "Reset_Field0x28",
+    "Reset_Field0x33c",
+    "Reset_Field0x340",
+    "Reset_Field0x344",
+    "Reset_Field0x348",
+    "Reset_Field0x34c",
+    "Reset_Field0x358",
+    "Reset_Field0x35c",
+    "Reset_Field0x360",
+    "Reset_Field0x384",
+    "Reset_Field0x38",
+    "Reset_Field0x398",
+    "Reset_Field0x39c",
+    "Reset_Field0x3a0",
+    "Reset_Field0x3a4",
+    "Reset_Field0x3a8",
+    "Reset_Field0x3c",
+    "Reset_Field0x50",
+    "Reset_Field0x54",
+    "Reset_GearCount",
+    "Reset_GlidingGravityCoef",
+    "Reset_InertiaHalfDiagX",
+    "Reset_InertiaHalfDiagY",
+    "Reset_InertiaHalfDiagZ",
+    "Reset_InertiaMass",
+    "Reset_IsFakeEngine",
+    "Reset_JumpImpulseVal",
+    "Reset_LateralContactSlowDown",
+    "Reset_LateralSlopeAdherenceMax",
+    "Reset_LateralSlopeAdherenceMin",
+    "Reset_LimitToMaxSpeedForce",
+    "Reset_LinearSpeed2PositiveDeltaMax",
+    "Reset_M4AccelFromSlipAngle",
+    "Reset_M4LateralFrictionForce",
+    "Reset_M4LateralFrictionSquareForce",
+    "Reset_M4LateralFrictionSquareTorque",
+    "Reset_M4LateralFrictionTorque",
+    "Reset_M4LeaveSplippingSpeed",
+    "Reset_M4MaxFrictionForceFromSpeed",
+    "Reset_M4MaxFrictionForceWhenSlippingCoef",
+    "Reset_M4MaxFrictionTorqueFromSpeed",
+    "Reset_M4MaxFrictionTorqueWhenSlippingCoef",
+    "Reset_M4SlipAngleSpeed",
+    "Reset_M4SteerAngleWhenSlippingMax",
+    "Reset_M4SteerRadiusCoefFromSlipAngle",
+    "Reset_M4SteerRadiusFromSpeed",
+    "Reset_M4SteerRadiusWhenSlippingCoef",
+    "Reset_M4SteerTorqueCoef",
+    "Reset_M5AccelSlipCoefMax",
+    "Reset_M5KeepNoSteerSlowDownWhenSlippingDuration",
+    "Reset_M5KeepSlidingAccelDurarion",
+    "Reset_M5KeepSteerSlowDownDurarion",
+    "Reset_M5LateralContactSlowDownDuration",
+    "Reset_M5MaxAxialRolloverTorque",
+    "Reset_M5SlippingAccelCurve",
+    "Reset_M5SlippingAccelCurveCoef",
+    "Reset_M5SmoothInputSteerDurationFromSpeed",
+    "Reset_M5SteerCoefFromSpeed",
+    "Reset_M6AfterBurnoutAccMod",
+    "Reset_M6AfterBurnoutDuration",
+    "Reset_M6AfterBurnoutImpulse",
+    "Reset_M6AirRpmAcc",
+    "Reset_M6AirRpmDeadening",
+    "Reset_M6BrakeMaxDynamicRear",
+    "Reset_M6BrakeMaxRear",
+    "Reset_M6BrakeModulationWhenSlipping",
+    "Reset_M6BrakeSmokeIntensity",
+    "Reset_M6BurnoutAccMod",
+    "Reset_M6BurnoutCenterForceCoeff2",
+    "Reset_M6BurnoutCenterForceCoeff",
+    "Reset_M6BurnoutDuration",
+    "Reset_M6BurnoutFricMod",
+    "Reset_M6BurnoutLateralSpeed",
+    "Reset_M6BurnoutLateralSpeedCoeff",
+    "Reset_M6BurnoutLateralSpeedMax",
+    "Reset_M6BurnoutRadius",
+    "Reset_M6BurnoutRadiusMax",
+    "Reset_M6BurnoutRolloverFromSpeed",
+    "Reset_M6BurnoutRpmAcc",
+    "Reset_M6BurnoutSmokeIntensity",
+    "Reset_M6BurnoutSmokeVelocity",
+    "Reset_M6BurnoutSteerCoeff2",
+    "Reset_M6BurnoutSteerCoeff3",
+    "Reset_M6BurnoutSteerCoeff4",
+    "Reset_M6BurnoutSteerCoeff",
+    "Reset_M6BurnoutWheelAngularRotation",
+    "Reset_M6DonutRolloverFromSpeed",
+    "Reset_M6ForceEpsilon",
+    "Reset_M6FrictionModulationWhenSlipNBrake",
+    "Reset_M6GearRatio",
+    "Reset_M6InertialMass",
+    "Reset_M6InertialTorqueModulationX",
+    "Reset_M6InertialTorqueModulationZ",
+    "Reset_M6MaxDiffBtwGroundNormal",
+    "Reset_M6MaxDiffBtwnPropulsionAndSpeed",
+    "Reset_M6MaxNegAngle4Burnout",
+    "Reset_M6MaxPosAngle4Burnout",
+    "Reset_M6MaxRPM",
+    "Reset_M6MaxRpm",
+    "Reset_M6MaxSpeed4Burnout",
+    "Reset_M6MinRPM",
+    "Reset_M6MinSpeed4Burnout",
+    "Reset_M6RolloverLateralFromSpeedRatio",
+    "Reset_M6RpmComputedOnGearDown",
+    "Reset_M6RpmDelta",
+    "Reset_M6RpmGainCoefOnGearDown",
+    "Reset_M6RpmGainOnTakeOff",
+    "Reset_M6RpmLossCoefOnGearUp",
+    "Reset_M6RpmLossOnTakeOffFinished",
+    "Reset_M6RpmWantedOnGearUp",
+    "Reset_M6SpeedLimitNegForTakeOffFront",
+    "Reset_M6SpeedLimitNegForTakeOffRear",
+    "Reset_M6SpeedLimitPositiveForTakeOffFront",
+    "Reset_M6SpeedLimitPositiveForTakeOffRear",
+    "Reset_Mass",
+    "Reset_MaxAngularSpeedYAirControl",
+    "Reset_MaxDistPerStep",
+    "Reset_MaxSideFrictionBlendCoef",
+    "Reset_MaxSideFrictionSliding",
+    "Reset_MinGear",
+    "Reset_ModulationFromWheelCompression",
+    "Reset_NoSteerSlowDownWhenSlipping",
+    "Reset_RelSpeedMultCoef",
+    "Reset_RolloverAxial",
+    "Reset_RolloverLateral",
+    "Reset_RolloverLateralFromAngle",
+    "Reset_RubberBallElasticity",
+    "Reset_ShockModel",
+    "Reset_SideFriction1",
+    "Reset_SideFriction2",
+    "Reset_SlipAngleForceCoef1",
+    "Reset_SlipAngleForceCoef2",
+    "Reset_SlipAngleForceMax",
+    "Reset_SoundEngineVolume",
+    "Reset_SoundImpactVolume",
+    "Reset_SoundSkidConcreteVolume",
+    "Reset_SoundSkidSandVolume",
+    "Reset_SteerAngleMax",
+    "Reset_SteerDurationBeforeSteerSlowDown",
+    "Reset_SteerGroundTorque",
+    "Reset_SteerGroundTorqueSlippingCoef",
+    "Reset_SteerLowSpeed",
+    "Reset_SteerMaxBlend",
+    "Reset_SteerModel",
+    "Reset_SteerRadiusCoef",
+    "Reset_SteerRadiusMin",
+    "Reset_SteerSlowDown",
+    "Reset_SteerSlowDownCoef",
+    "Reset_SteerSlowDownFadeInDuration",
+    "Reset_SteerSlowDownFadeOutDuration",
+    "Reset_SteerSpeed",
+    "Reset_TireMaterial",
+    "Reset_TwistAngle",
+    "Reset_VibrationPeriodSpeedCoef",
+    "Reset_VisualSteerAngleFromSpeed",
+    "Reset_WaterAngularFriction",
+    "Reset_WaterAngularFrictionSq",
+    "Reset_WaterBumpMinSpeed",
+    "Reset_WaterBumpSlowDownFromSpeedRatio",
+    "Reset_WaterFrictionFromSpeed",
+    "Reset_WaterGravity",
+    "Reset_WaterReboundMinHSpeed",
+    "Reset_WaterSplashFromSpeed",
+    "Reset_WheelFrictionCoefConcrete",
+    "Reset_WheelFrictionCoefMetal",
+    "Reset_WheelRestCoefConcrete",
+    "Reset_WheelRestCoefMetal",
+    "World_SetDayTime",
+    "World_EnableDynamicDayTime",
+    "World_DisableDynamicDayTime",
+    "World_SetDynamicDayTimeFlowSpeed",
+    "Vehicle_SetVehicleTuningByIndex",
+    "Vehicle_SetVehicleTuningByName",
+    "Vehicle_Transform",
+    "Reset_VehicleTuningParameters",
+    "Reset_VehicleTuning",
+    "Reset_Transform",
+    "Reset_VehicleEverything",
+    "Vehicle_DisableFreeWheeling",
+    "Vehicle_EnableFreeWheeling",
+    "Reset_VehicleMaterials",
+];

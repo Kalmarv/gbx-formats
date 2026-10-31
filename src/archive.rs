@@ -254,6 +254,26 @@ impl<'a, 's> Archive<'a, 's> {
             .map_err(|e| self.bad_at(at, format!("string of {} bytes is not UTF-8: {e}", bytes.len())))
     }
 
+    /// A string with a one-byte length (`StringLengthPrefix.Byte` in GBX.NET): UTF-8.
+    pub(crate) fn string8(&mut self) -> Result<String> {
+        let at = self.here();
+        let n = usize::from(self.u8()?);
+        let bytes = self.bytes(n)?;
+        std::str::from_utf8(bytes)
+            .map(str::to_owned)
+            .map_err(|e| self.bad_at(at, format!("string of {n} bytes is not UTF-8: {e}")))
+    }
+
+    /// A bool stored as one byte: 0 or 1, anything else refused.
+    pub(crate) fn bool8(&mut self) -> Result<bool> {
+        let at = self.here();
+        match self.u8()? {
+            0 => Ok(false),
+            1 => Ok(true),
+            n => Err(self.bad_at(at, format!("bool {n}: expected 0 or 1"))),
+        }
+    }
+
     /// A version number (`u32`) that must be one of `known`.
     pub(crate) fn version(&mut self, what: &str, known: &[u32]) -> Result<u32> {
         let at = self.here();

@@ -10,6 +10,8 @@ pub mod challenge;
 pub mod collector;
 pub mod ghost;
 pub mod media;
+pub mod parameters;
+pub mod unlimiter;
 
 use crate::archive::Archive;
 use crate::error::Result;

@@ -72,6 +72,17 @@ impl NodeTable {
         index < self.count
     }
 
+    /// Names `index` as a node the body never reads (a file or a stand-in the format defines): references to it
+    /// resolve to no node. The index must be below the header's node count and neither read, being read, nor already
+    /// external (the reference table's or an earlier call's).
+    pub(crate) fn add_external(&mut self, index: u32) -> bool {
+        if !self.has_slot(index) || self.slots.contains_key(&index) || self.external.contains(&index) {
+            return false;
+        }
+        self.external.push(index);
+        true
+    }
+
     pub(crate) fn reserve(&mut self, index: u32) {
         self.slots.insert(index, Slot::Reading);
     }

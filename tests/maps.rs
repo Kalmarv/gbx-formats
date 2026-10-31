@@ -8,11 +8,12 @@
 )]
 
 mod inputs;
+mod maps_unlimiter;
 
 use gbx_formats::game::block::Block;
 use gbx_formats::game::challenge::{Challenge, Header};
 use gbx_formats::game::collector::ChallengeParameters;
-use gbx_formats::{Gbx, Id, Ident, Nodes};
+use gbx_formats::{Gbx, Id, Ident, NodeIndex, Nodes};
 use inputs::{Game, OracleSet, oracle};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -38,15 +39,9 @@ fn ident(i: &Ident) -> Value {
     json!({"id": id(&i.id), "collection": collection(&i.collection), "author": id(&i.author)})
 }
 
-fn block(b: &Block, version: u32, nodes: &Nodes) -> Value {
-    let offset = if version >= 6 { [1, 0, 1] } else { [0, 0, 0] };
-    let coord: Vec<i64> = b
-        .coord
-        .iter()
-        .zip(offset)
-        .map(|(&c, o)| i64::from(c) - o)
-        .collect();
-    let (author, skin) = match &b.skin {
+/// A block's author and skin as the dump holds them.
+fn author_skin(skin: Option<&(Id, Option<NodeIndex>)>, nodes: &Nodes) -> (Value, Value) {
+    match skin {
         None => (Value::Null, Value::Null),
         Some((author, skin)) => {
             let skin = skin.map(|i| nodes.get(i).unwrap()).map(|n| {
@@ -57,7 +52,18 @@ fn block(b: &Block, version: u32, nodes: &Nodes) -> Value {
             });
             (id(author), skin.unwrap_or(Value::Null))
         }
-    };
+    }
+}
+
+fn block(b: &Block, version: u32, nodes: &Nodes) -> Value {
+    let offset = if version >= 6 { [1, 0, 1] } else { [0, 0, 0] };
+    let coord: Vec<i64> = b
+        .coord
+        .iter()
+        .zip(offset)
+        .map(|(&c, o)| i64::from(c) - o)
+        .collect();
+    let (author, skin) = author_skin(b.skin.as_ref(), nodes);
     // GBX.NET reads version 0's 16-bit flags as a signed short, so a skin (bit 15) makes them negative there
     let flags = if version == 0 {
         i32::from(b.flags as u16 as i16)
@@ -90,6 +96,27 @@ fn census(gbx: &Gbx<'_>, nodes: &Nodes) -> BTreeMap<String, u64> {
         }
     }
     out
+}
+
+/// The census keys on which the two readings differ, with both counts.
+fn census_diff(ours: &BTreeMap<String, u64>, theirs: &Value) -> Value {
+    let theirs: BTreeMap<String, u64> = theirs
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| (k.clone(), v.as_u64().unwrap()))
+        .collect();
+    let mut diff = serde_json::Map::new();
+    for key in ours.keys().chain(theirs.keys()) {
+        let (o, t) = (
+            ours.get(key).copied().unwrap_or(0),
+            theirs.get(key).copied().unwrap_or(0),
+        );
+        if o != t {
+            diff.insert(key.clone(), json!([o, t]));
+        }
+    }
+    Value::Object(diff)
 }
 
 /// Reads one map and compares it with GBX.NET's reading; when GBX.NET refused the map (`want["ok"]` false), only the
@@ -141,8 +168,13 @@ fn compare(path: &Path, want: &Value, decompressed: &Path, failures: &mut Vec<St
         .collect();
     chunks.extend(map.chunks.ids.iter().map(|c| format!("0x{c:08X}")));
     check("chunks", json!(chunks), &want["chunks"]);
-    let census = census(&gbx, &nodes);
-    check("node chunks", json!(census), &want["node_chunks"]);
+    let mut census = census(&gbx, &nodes);
+    maps_unlimiter::census_adjust(map, &nodes, &mut census);
+    check(
+        "node chunks (key: [ours, GBX.NET])",
+        census_diff(&census, &want["node_chunks"]),
+        &json!({}),
+    );
 
     let m = &want["map"];
     let common = header.common.as_ref().ok_or("no header chunk 0x03043003")?;
@@ -178,6 +210,10 @@ fn compare(path: &Path, want: &Value, decompressed: &Path, failures: &mut Vec<St
     let data = map.block_data.as_ref().or(map.legacy_block_data.as_ref());
     if let Some(data) = data {
         check("size", json!(data.size), &m["size"]);
+    }
+    maps_unlimiter::compare(map, &nodes, want, &mut check);
+    // TMUnlimiter's stand-in block is in the block data; GBX.NET lists the chunk's blocks instead, compared above
+    if let Some(data) = data.filter(|_| !maps_unlimiter::replaces_blocks(map)) {
         let ours: Vec<Value> = data
             .blocks
             .iter()
