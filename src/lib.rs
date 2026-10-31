@@ -40,6 +40,7 @@ mod error;
 pub mod game;
 mod gbx;
 mod node;
+pub mod plug;
 
 pub use archive::{Id, Ident, PackDesc};
 pub use classes::{Node, class_name};

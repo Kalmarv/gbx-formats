@@ -9,9 +9,6 @@ use crate::archive::{Archive, Id, PackDesc};
 use crate::error::Result;
 use crate::node::{Chunks, NodeIndex};
 
-fn vec4(r: &mut Archive<'_, '_>) -> Result<[f32; 4]> {
-    Ok([r.f32()?, r.f32()?, r.f32()?, r.f32()?])
-}
 fn refs(r: &mut Archive<'_, '_>) -> Result<Vec<Option<NodeIndex>>> {
     r.version("deprecated node list", &[10])?;
     r.list(4, |r| r.node_ref())
@@ -303,7 +300,7 @@ impl MediaBlockTransitionFade {
             match id {
                 0x030AB000 => {
                     n.keys = Some(r.list(8, FadeKey::read)?);
-                    n.color = Some(vec4(r)?);
+                    n.color = Some(r.vec4()?);
                 }
                 _ => return Ok(false),
             }
@@ -391,7 +388,7 @@ impl TriangleGeometry {
             }
             positions.push(row);
         }
-        let vertices = r.list(16, vec4)?;
+        let vertices = r.list(16, |r| r.vec4())?;
         if vertices.len() != columns {
             return Err(r.bad("triangle vertex count differs from matrix width"));
         }
@@ -850,7 +847,7 @@ impl CameraPathKey {
             target: r.i32()?,
             target_position: r.vec3()?,
             weight: r.f32()?,
-            rotation: vec4(r)?,
+            rotation: r.vec4()?,
         })
     }
 }

@@ -5,6 +5,7 @@ use crate::archive::Archive;
 use crate::error::{Error, Result};
 use crate::game;
 use crate::node::Chunks;
+use crate::plug;
 
 macro_rules! classes {
     ($($(#[$doc:meta])* $variant:ident($ty:path) = $id:literal, $name:literal;)*) => {
@@ -82,51 +83,65 @@ classes! {
     /// A block's skin.
     BlockSkin(game::block::BlockSkin) = 0x0305_9000, "CGameCtnBlockSkin";
     /// CGameCtnMediaClipGroup.
-    MediaClipGroup(game::media::MediaClipGroup) = 0x0307a000, "CGameCtnMediaClipGroup";
+    MediaClipGroup(game::media::MediaClipGroup) = 0x0307_A000, "CGameCtnMediaClipGroup";
     /// CGameCtnMediaClip.
-    MediaClip(game::media::MediaClip) = 0x03079000, "CGameCtnMediaClip";
+    MediaClip(game::media::MediaClip) = 0x0307_9000, "CGameCtnMediaClip";
     /// CGameCtnMediaTrack.
-    MediaTrack(game::media::MediaTrack) = 0x03078000, "CGameCtnMediaTrack";
+    MediaTrack(game::media::MediaTrack) = 0x0307_8000, "CGameCtnMediaTrack";
     /// CGameCtnMediaBlockText.
-    MediaBlockText(game::media::MediaBlockText) = 0x030a8000, "CGameCtnMediaBlockText";
+    MediaBlockText(game::media::MediaBlockText) = 0x030A_8000, "CGameCtnMediaBlockText";
     /// CGameCtnMediaBlockCameraCustom.
-    MediaBlockCameraCustom(game::media::MediaBlockCameraCustom) = 0x030a2000, "CGameCtnMediaBlockCameraCustom";
+    MediaBlockCameraCustom(game::media::MediaBlockCameraCustom) = 0x030A_2000, "CGameCtnMediaBlockCameraCustom";
     /// CGameCtnMediaBlockTransitionFade.
-    MediaBlockTransitionFade(game::media::MediaBlockTransitionFade) = 0x030ab000, "CGameCtnMediaBlockTransitionFade";
+    MediaBlockTransitionFade(game::media::MediaBlockTransitionFade) = 0x030A_B000, "CGameCtnMediaBlockTransitionFade";
     /// CGameCtnMediaBlockMusicEffect.
-    MediaBlockMusicEffect(game::media::MediaBlockMusicEffect) = 0x030a6000, "CGameCtnMediaBlockMusicEffect";
+    MediaBlockMusicEffect(game::media::MediaBlockMusicEffect) = 0x030A_6000, "CGameCtnMediaBlockMusicEffect";
     /// CGameCtnMediaBlockCameraGame.
-    MediaBlockCameraGame(game::media::MediaBlockCameraGame) = 0x03084000, "CGameCtnMediaBlockCameraGame";
+    MediaBlockCameraGame(game::media::MediaBlockCameraGame) = 0x0308_4000, "CGameCtnMediaBlockCameraGame";
     /// CGameCtnMediaBlockTriangles.
-    MediaBlockTriangles(game::media::MediaBlockTriangles) = 0x03029000, "CGameCtnMediaBlockTriangles";
+    MediaBlockTriangles(game::media::MediaBlockTriangles) = 0x0302_9000, "CGameCtnMediaBlockTriangles";
     /// CGameCtnMediaBlockTriangles2D.
-    MediaBlockTriangles2D(game::media::MediaBlockTriangles2D) = 0x0304b000, "CGameCtnMediaBlockTriangles2D";
+    MediaBlockTriangles2D(game::media::MediaBlockTriangles2D) = 0x0304_B000, "CGameCtnMediaBlockTriangles2D";
     /// CGameCtnMediaBlockTriangles3D.
-    MediaBlockTriangles3D(game::media::MediaBlockTriangles3D) = 0x0304c000, "CGameCtnMediaBlockTriangles3D";
+    MediaBlockTriangles3D(game::media::MediaBlockTriangles3D) = 0x0304_C000, "CGameCtnMediaBlockTriangles3D";
     /// CGameCtnMediaBlockImage.
-    MediaBlockImage(game::media::MediaBlockImage) = 0x030a5000, "CGameCtnMediaBlockImage";
+    MediaBlockImage(game::media::MediaBlockImage) = 0x030A_5000, "CGameCtnMediaBlockImage";
     /// CGameCtnMediaBlockSound.
-    MediaBlockSound(game::media::MediaBlockSound) = 0x030a7000, "CGameCtnMediaBlockSound";
+    MediaBlockSound(game::media::MediaBlockSound) = 0x030A_7000, "CGameCtnMediaBlockSound";
     /// CGameCtnMediaBlockFxColors.
-    MediaBlockFxColors(game::media::MediaBlockFxColors) = 0x03080000, "CGameCtnMediaBlockFxColors";
+    MediaBlockFxColors(game::media::MediaBlockFxColors) = 0x0308_0000, "CGameCtnMediaBlockFxColors";
     /// CGameCtnMediaBlockFxBlurDepth.
-    MediaBlockFxBlurDepth(game::media::MediaBlockFxBlurDepth) = 0x03081000, "CGameCtnMediaBlockFxBlurDepth";
+    MediaBlockFxBlurDepth(game::media::MediaBlockFxBlurDepth) = 0x0308_1000, "CGameCtnMediaBlockFxBlurDepth";
     /// CGameCtnMediaBlockFxBloom.
-    MediaBlockFxBloom(game::media::MediaBlockFxBloom) = 0x03083000, "CGameCtnMediaBlockFxBloom";
+    MediaBlockFxBloom(game::media::MediaBlockFxBloom) = 0x0308_3000, "CGameCtnMediaBlockFxBloom";
     /// CGameCtnMediaBlockFxBlurMotion.
-    MediaBlockFxBlurMotion(game::media::MediaBlockFxBlurMotion) = 0x03082000, "CGameCtnMediaBlockFxBlurMotion";
+    MediaBlockFxBlurMotion(game::media::MediaBlockFxBlurMotion) = 0x0308_2000, "CGameCtnMediaBlockFxBlurMotion";
     /// CGameCtnMediaBlockCameraPath.
-    MediaBlockCameraPath(game::media::MediaBlockCameraPath) = 0x030a1000, "CGameCtnMediaBlockCameraPath";
+    MediaBlockCameraPath(game::media::MediaBlockCameraPath) = 0x030A_1000, "CGameCtnMediaBlockCameraPath";
     /// CGameCtnMediaBlockCameraEffectShake.
-    MediaBlockCameraEffectShake(game::media::MediaBlockCameraEffectShake) = 0x030a4000, "CGameCtnMediaBlockCameraEffectShake";
+    MediaBlockCameraEffectShake(game::media::MediaBlockCameraEffectShake) = 0x030A_4000, "CGameCtnMediaBlockCameraEffectShake";
     /// CControlEffectSimi.
-    ControlEffectSimi(game::media::ControlEffectSimi) = 0x07010000, "CControlEffectSimi";
+    ControlEffectSimi(game::media::ControlEffectSimi) = 0x0701_0000, "CControlEffectSimi";
     /// CFuncKeys.
-    FuncKeys(game::media::FuncKeys) = 0x05002000, "CFuncKeys";
+    FuncKeys(game::media::FuncKeys) = 0x0500_2000, "CFuncKeys";
     /// CFuncKeysReal.
-    FuncKeysReal(game::media::FuncKeysReal) = 0x0501a000, "CFuncKeysReal";
+    FuncKeysReal(game::media::FuncKeysReal) = 0x0501_A000, "CFuncKeysReal";
     /// A ghost.
     Ghost(game::ghost::Ghost) = 0x0309_2000, "CGameCtnGhost";
     /// The MediaTracker block that plays a ghost.
     MediaBlockGhost(game::ghost::MediaBlockGhost) = 0x030E_5000, "CGameCtnMediaBlockGhost";
+    /// A scene tree: a block model's structure.
+    Tree(plug::tree::Tree) = 0x0904_F000, "CPlugTree";
+    /// A scene tree with levels of detail.
+    TreeVisualMip(plug::tree::TreeVisualMip) = 0x0901_5000, "CPlugTreeVisualMip";
+    /// An indexed triangle mesh.
+    VisualIndexedTriangles(plug::visual::VisualIndexedTriangles) = 0x0901_E000, "CPlugVisualIndexedTriangles";
+    /// A material.
+    Material(plug::material::Material) = 0x0907_9000, "CPlugMaterial";
+    /// A material's textures and samplers.
+    MaterialCustom(plug::material::MaterialCustom) = 0x0903_A000, "CPlugMaterialCustom";
+    /// A collision surface.
+    Surface(plug::surface::Surface) = 0x0900_C000, "CPlugSurface";
+    /// A collision geometry.
+    SurfaceGeom(plug::surface::SurfaceGeom) = 0x0900_F000, "CPlugSurfaceGeom";
 }
