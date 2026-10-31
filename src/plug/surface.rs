@@ -260,7 +260,10 @@ impl SurfaceGeom {
             match id {
                 0x0900_F004 => {
                     n.u01 = Some(r.id()?);
-                    n.bounding_box = Some(box_aligned(r)?);
+                    let bounds = box_aligned(r)?;
+                    // a pack file's reader folds the first float of the box minus the fourth into the cipher here
+                    r.dummy_write(f32::to_le_bytes(bounds.center[0] - bounds.half_size[0]));
+                    n.bounding_box = Some(bounds);
                     n.surf = surf(r)?;
                     n.surface_id = Some(r.i16()?);
                 }

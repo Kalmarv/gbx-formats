@@ -12,6 +12,7 @@
 )]
 
 pub mod material;
+pub mod solid;
 pub mod surface;
 pub mod tree;
 pub mod visual;
