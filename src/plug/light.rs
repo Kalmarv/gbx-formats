@@ -150,20 +150,37 @@ impl SpotProperties {
         })
     }
 }
-/// GxLightData fields as serialized by TrackMania Forever.
+/// Fields inherited directly from GxLight.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GxLightData {
-    /// Common.
+    /// Common lighting properties, chunk `0x04001009`.
     pub common: Option<LightProperties>,
-    /// Point.
-    pub point: Option<PointProperties>,
-    /// Ball.
-    pub ball: Option<BallProperties>,
 }
 impl GxLightData {
     fn chunk(&mut self, r: &mut Archive<'_, '_>, id: u32) -> Result<bool> {
+        if id != 0x04001009 {
+            return Ok(false);
+        }
+        self.common = Some(LightProperties::read(r)?);
+        Ok(true)
+    }
+}
+/// Fields inherited by GxLightBall and its spot/frustum derivatives.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BallLightData {
+    /// Common GxLight fields.
+    pub base: GxLightData,
+    /// Point-light flare properties, chunk `0x04003004`.
+    pub point: Option<PointProperties>,
+    /// Ball-light attenuation properties, chunk `0x04002006`.
+    pub ball: Option<BallProperties>,
+}
+impl BallLightData {
+    fn chunk(&mut self, r: &mut Archive<'_, '_>, id: u32) -> Result<bool> {
+        if self.base.chunk(r, id)? {
+            return Ok(true);
+        }
         match id {
-            0x04001009 => self.common = Some(LightProperties::read(r)?),
             0x04003004 => self.point = Some(PointProperties::read(r)?),
             0x04002006 => self.ball = Some(BallProperties::read(r)?),
             _ => return Ok(false),
@@ -175,7 +192,7 @@ impl GxLightData {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LightBall {
     /// Base.
-    pub base: GxLightData,
+    pub base: BallLightData,
     /// Chunks.
     pub chunks: Chunks,
 }
@@ -199,7 +216,7 @@ pub struct LightSpot {
     /// Spot.
     pub spot: Option<SpotProperties>,
     /// Base.
-    pub base: GxLightData,
+    pub base: BallLightData,
     /// Chunks.
     pub chunks: Chunks,
 }
@@ -260,7 +277,7 @@ pub struct LightFrustum {
     /// Frustum.
     pub frustum: Option<FrustumProperties>,
     /// Base.
-    pub base: GxLightData,
+    pub base: BallLightData,
     /// Chunks.
     pub chunks: Chunks,
 }

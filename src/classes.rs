@@ -4,7 +4,8 @@
 //! Each class also names the id a pack file's reader writes as it starts one of its nodes (see [`crate::pak`]): its
 //! parent class's id as the game knew it when TrackMania Nations Forever's packs were made, which for most classes is
 //! the old id of the class it derives from (`CGameCtnMediaBlockText`, `0x030A8000`, derives from
-//! `CGameCtnMediaBlock`, whose old id is `0x2406A000`).
+//! `CGameCtnMediaBlock`, whose old id is `0x2406A000`). An unchunked archive that overrides the chunk reader uses
+//! `parent none`: it does not make that write.
 
 use crate::archive::Archive;
 use crate::error::{Error, Result};
@@ -66,8 +67,8 @@ macro_rules! classes {
             }
         }
 
-        /// Reads a node of class `class` (its id read at `at`), starting with the dummy write a pack file's reader
-        /// makes for it: the id of its parent class.
+        /// Reads a node of class `class` (its id read at `at`), making the parent-class dummy write for chunked
+        /// nodes. An unchunked archive marked `parent none` reads without this write.
         pub(crate) fn read_node(r: &mut Archive<'_, '_>, class: u32, at: usize) -> Result<Node> {
             match class {
                 $($id => {

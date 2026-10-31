@@ -26,9 +26,10 @@ impl SpecularSubMap {
 /// BitmapImage fields as serialized by TrackMania Forever.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BitmapImage {
-    /// Image.
+    /// Image source: an external image file (such as a DDS) or an inline procedural generator.
+    /// External file names and folders are in the Gbx reference table at this node index.
     pub image: Option<NodeIndex>,
-    /// Flags.
+    /// Serialized bitmap flags: usage in bits 0..8 and pixel-update mode in bits 8..16.
     pub flags: u64,
     /// Mipmap lower alpha.
     pub mipmap_lower_alpha: f32,
@@ -128,7 +129,7 @@ pub struct SamplerState {
     pub name: Id,
     /// Bitmap.
     pub bitmap: Option<NodeIndex>,
-    /// Legacy flags.
+    /// Serialized packed filtering and U/V/W address state; retained before legacy conversion.
     pub legacy_flags: u32,
     /// Mipmap lod bias.
     pub mipmap_lod_bias: f32,
@@ -163,7 +164,7 @@ impl SamplerState {
 pub struct AddressTransform {
     /// Flags.
     pub flags: u32,
-    /// Texcoord index.
+    /// Serialized texture-coordinate index, retained even if native UV-generation upgrades would replace it.
     pub texcoord_index: i32,
     /// Transform flags.
     pub transform_flags: u32,
