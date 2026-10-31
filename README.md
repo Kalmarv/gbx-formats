@@ -14,6 +14,10 @@ It reads, from bytes you give it:
 - **Maps** (`CGameCtnChallenge`): the header chunks (description and medal times, map info and name, version, XML,
   thumbnail and comments) and the body: blocks with their skins and waypoints, block stock and parameters (medal
   times, tips, stunts), vehicle, checkpoints, laps, mediatracker clip references, music, thumbnail camera, password.
+- **MediaTracker**: clips and trigger groups, tracks, text, image, sound, custom/game/path cameras, camera shake,
+  fades, 2D/3D triangle animation, color/bloom/depth/motion effects, similarity effects and real key functions.
+  `game::media` keeps their fields and node references; `Clips` and `Challenge` resolve clip references through
+  typed accessors. Derived triangle and real-function nodes read the base classes' chunk ids.
 
 It was written against the 100 most downloaded TrackMania Nations Forever maps uploaded to TrackMania Exchange in
 2026, checked field by field against [GBX.NET](https://github.com/BigBang1112/gbx-net) 2.5.0. Used by
@@ -61,9 +65,8 @@ with `game::challenge::Header::read(&gbx)`.
 ## What it does not do
 
 - It does not write Gbx files, or read the text format or Gbx versions other than 6.
-- It reads only the classes maps hold, and not yet all of them: mediatracker clips (`CGameCtnMediaClip`,
-  `CGameCtnMediaClipGroup` and their tracks and blocks) and ghosts are refused as unknown classes, and the custom
-  objects some maps embed are not read.
+- It reads the TMF MediaTracker chunk layouts present in the map corpus. Ghost blocks and ghosts are refused
+  as unknown classes; custom objects and newer MediaTracker layouts are not read.
 - TMUnlimiter's chunks (`0x3F001000`, `0x3F001003`), which hold the real blocks of maps made with it, are kept as
   stored; those maps' block data is the stand-in TMUnlimiter writes for the game.
 - It does not read pack files (`.pak`) or the block models a map names.
