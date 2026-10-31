@@ -1069,3 +1069,45 @@ impl FuncKeysReal {
         Ok(n)
     }
 }
+/// A music effect key: the music's volume (and the sounds') from this time.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MusicEffectKey {
+    /// Time.
+    pub time: f32,
+    /// Music volume.
+    pub music_volume: f32,
+    /// Sound volume.
+    pub sound_volume: f32,
+}
+/// CGameCtnMediaBlockMusicEffect (`0x030A6000`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MediaBlockMusicEffect {
+    /// Keys.
+    pub keys: Option<Vec<MusicEffectKey>>,
+    /// Chunks.
+    pub chunks: Chunks,
+}
+impl MediaBlockMusicEffect {
+    pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<Self> {
+        let mut n = Self {
+            keys: None,
+            chunks: Chunks::default(),
+        };
+        n.chunks = r.chunks("CGameCtnMediaBlockMusicEffect", |r, id| {
+            match id {
+                0x030A6001 => {
+                    n.keys = Some(r.list(12, |r| {
+                        Ok(MusicEffectKey {
+                            time: r.f32()?,
+                            music_volume: r.f32()?,
+                            sound_volume: r.f32()?,
+                        })
+                    })?)
+                }
+                _ => return Ok(false),
+            }
+            Ok(true)
+        })?;
+        Ok(n)
+    }
+}

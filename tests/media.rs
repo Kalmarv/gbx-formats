@@ -477,3 +477,15 @@ fn challenge_references_resolve_typed_clips() {
     assert!(absent.in_game(&nodes).is_none());
     assert!(absent.end_race(&nodes).is_none());
 }
+#[test]
+fn music_effect() {
+    let mut b = Vec::new();
+    words(&mut b, &[0x030A6001, 1]);
+    floats(&mut b, &[2.0, 0.5, 0.25]);
+    words(&mut b, &[0xFACA_DE01]);
+    check(0x030A6000, &b, &[0x030A6001], |node| {
+        let n: &MediaBlockMusicEffect = node.try_into().unwrap();
+        let k = &n.keys.as_ref().unwrap()[0];
+        assert_eq!((k.time, k.music_volume, k.sound_volume), (2.0, 0.5, 0.25));
+    });
+}

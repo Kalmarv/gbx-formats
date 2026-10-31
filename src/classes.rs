@@ -93,6 +93,8 @@ classes! {
     MediaBlockCameraCustom(game::media::MediaBlockCameraCustom) = 0x030a2000, "CGameCtnMediaBlockCameraCustom";
     /// CGameCtnMediaBlockTransitionFade.
     MediaBlockTransitionFade(game::media::MediaBlockTransitionFade) = 0x030ab000, "CGameCtnMediaBlockTransitionFade";
+    /// CGameCtnMediaBlockMusicEffect.
+    MediaBlockMusicEffect(game::media::MediaBlockMusicEffect) = 0x030a6000, "CGameCtnMediaBlockMusicEffect";
     /// CGameCtnMediaBlockCameraGame.
     MediaBlockCameraGame(game::media::MediaBlockCameraGame) = 0x03084000, "CGameCtnMediaBlockCameraGame";
     /// CGameCtnMediaBlockTriangles.
