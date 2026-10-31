@@ -13,7 +13,9 @@ use crate::node::Chunks;
 use crate::plug;
 
 macro_rules! classes {
-    ($($(#[$doc:meta])* $variant:ident($ty:path) = $id:literal, $name:literal, parent $parent:literal;)*) => {
+    (@write $r:ident, none) => {};
+    (@write $r:ident, $parent:literal) => { $r.dummy_write(u32::to_le_bytes($parent)); };
+    ($($(#[$doc:meta])* $variant:ident($ty:path) = $id:literal, $name:literal, parent $parent:tt;)*) => {
         /// A node of a class this crate reads.
         #[derive(Clone, Debug)]
         pub enum Node {
@@ -69,7 +71,7 @@ macro_rules! classes {
         pub(crate) fn read_node(r: &mut Archive<'_, '_>, class: u32, at: usize) -> Result<Node> {
             match class {
                 $($id => {
-                    r.dummy_write(u32::to_le_bytes($parent));
+                    classes!(@write r, $parent);
                     Ok(Node::$variant(Box::new(<$ty>::read(r)?)))
                 })*
                 _ => Err(Error::UnknownClass {
@@ -155,4 +157,50 @@ classes! {
     Surface(plug::surface::Surface) = 0x0900_C000, "CPlugSurface", parent 0x0902_B000;
     /// A collision geometry.
     SurfaceGeom(plug::surface::SurfaceGeom) = 0x0900_F000, "CPlugSurfaceGeom", parent 0x0902_B000;
+    /// CPlugBitmap.
+    TextureBitmap(plug::bitmap::TextureBitmap) = 0x09011000, "CPlugBitmap", parent 0x0902b000;
+    /// CPlugBitmapApply.
+    BitmapApply(plug::bitmap::BitmapApply) = 0x09012000, "CPlugBitmapApply", parent 0x09047000;
+    /// CPlugBitmapRenderWater.
+    BitmapRenderWater(plug::bitmap::BitmapRenderWater) = 0x09087000, "CPlugBitmapRenderWater", parent 0x09086000;
+    /// CPlugBitmapRenderOverlay.
+    BitmapRenderOverlay(plug::bitmap::BitmapRenderOverlay) = 0x0909e000, "CPlugBitmapRenderOverlay", parent 0x09086000;
+    /// CPlugBitmapRenderLightOcc.
+    BitmapRenderLightOcc(plug::bitmap::BitmapRenderLightOcc) = 0x0909f000, "CPlugBitmapRenderLightOcc", parent 0x09086000;
+    /// CPlugBitmapRenderCamera.
+    BitmapRenderCamera(plug::bitmap::BitmapRenderCamera) = 0x09089000, "CPlugBitmapRenderCamera", parent 0x09086000;
+    /// CPlugBitmapRenderSub.
+    BitmapRenderSub(plug::bitmap::BitmapRenderSub) = 0x09091000, "CPlugBitmapRenderSub", parent 0x09086000;
+    /// CPlugBitmapRenderHemisphere.
+    BitmapRenderHemisphere(plug::bitmap::BitmapRenderHemisphere) = 0x09058000, "CPlugBitmapRenderHemisphere", parent 0x09086000;
+    /// CPlugBitmapRenderLightFromMap.
+    BitmapRenderLightFromMap(plug::bitmap::BitmapRenderLightFromMap) = 0x09021000, "CPlugBitmapRenderLightFromMap", parent 0x09086000;
+    /// CPlugShaderApply.
+    ShaderApply(plug::shader::ShaderApply) = 0x09026000, "CPlugShaderApply", parent 0x09004000;
+    /// CPlugShaderPass.
+    ShaderPass(plug::shader::ShaderPass) = 0x09067000, "CPlugShaderPass", parent 0x0902b000;
+    /// CFuncShaderLayerUV.
+    FuncShaderLayerUv(plug::func_shader::FuncShaderLayerUv) = 0x05015000, "CFuncShaderLayerUV", parent 0x05011000;
+    /// CFuncShaders.
+    FuncShaders(plug::func_shader::FuncShaders) = 0x05014000, "CFuncShaders", parent 0x05011000;
+    /// GxLightBall.
+    LightBall(plug::light::LightBall) = 0x04002000, "GxLightBall", parent 0x04003000;
+    /// GxLightSpot.
+    LightSpot(plug::light::LightSpot) = 0x0400b000, "GxLightSpot", parent 0x04002000;
+    /// GxLightFrustum.
+    LightFrustum(plug::light::LightFrustum) = 0x0400a000, "GxLightFrustum", parent 0x04002000;
+    /// GxLightDirectional.
+    LightDirectional(plug::light::LightDirectional) = 0x04007000, "GxLightDirectional", parent 0x04006000;
+    /// CPlugLight.
+    Light(plug::light::Light) = 0x0901d000, "CPlugLight", parent 0x0902b000;
+    /// CHmsLight.
+    HmsLight(plug::light::HmsLight) = 0x0600c000, "CHmsLight", parent 0x0600b000;
+    /// CSceneLight.
+    SceneLight(plug::light::SceneLight) = 0x0a00b000, "CSceneLight", parent 0x0a009000;
+    /// CHmsLightMapMood.
+    HmsLightMapMood(plug::light::HmsLightMapMood) = 0x06023000, "CHmsLightMapMood", parent 0x01001000;
+    /// CHmsLightMap.
+    HmsLightMap(plug::light::HmsLightMap) = 0x06021000, "CHmsLightMap", parent 0x01001000;
+    /// CPlugFileGen overrides the chunk archive; GBX.NET makes no class write (also absent from writes.tsv).
+    FileGenerator(plug::bitmap::FileGenerator) = 0x0902_F000, "CPlugFileGen", parent none;
 }

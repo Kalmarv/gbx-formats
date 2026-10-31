@@ -11,7 +11,11 @@
     clippy::cast_possible_truncation
 )]
 
+pub mod bitmap;
+pub mod func_shader;
+pub mod light;
 pub mod material;
+pub mod shader;
 pub mod surface;
 pub mod tree;
 pub mod visual;
