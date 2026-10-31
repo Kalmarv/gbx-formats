@@ -6,10 +6,11 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::archive::{Archive, Id, Ident};
-use crate::error::Result;
+use crate::archive::{Archive, Id, Ident, State};
+use crate::error::{Result, Space};
 use crate::game::nullable;
-use crate::node::{Chunks, NodeIndex};
+use crate::gbx::HeaderChunk;
+use crate::node::{Chunks, NodeIndex, NodeTable};
 
 /// A node reference.
 type Node = Option<NodeIndex>;
@@ -150,5 +151,89 @@ impl Collector {
             _ => return Ok(false),
         }
         Ok(true)
+    }
+}
+
+/// Header chunk `0x0301A003` of a collector's file (a block info, a decoration, a collection item): what the game lists
+/// before it reads the file, its ident first. GBX.NET's `SHeaderDesc`, versions 1 to 8; a field is `Some` in the
+/// versions that store it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CollectorDesc {
+    /// The collector's ident: its name, collection and author (the name a map's blocks use).
+    pub ident: Ident,
+    /// The chunk's version.
+    pub version: u32,
+    /// The editor page it is listed on.
+    pub page_name: String,
+    /// Version 5: an id GBX.NET does not name.
+    pub u05: Option<Id>,
+    /// Version 4 and later: the parent collector's id.
+    pub parent: Option<Id>,
+    /// Versions 1 and 2: a bool GBX.NET does not name.
+    pub u01: Option<bool>,
+    /// Version 2: whether the collector is internal.
+    pub is_internal: Option<bool>,
+    /// Version 3 and later: its flags (`ECollectorFlags`).
+    pub flags: Option<i32>,
+    /// Version 2 and later: its position in the catalog.
+    pub catalog_position: Option<i16>,
+    /// Versions 2 to 5: the least available, the price in copper and the most available.
+    pub available: Option<(u8, i32, i16)>,
+    /// Version 7 and later: its display name.
+    pub name: Option<String>,
+    /// Version 8 and later: its production state (`EProdState`).
+    pub prod_state: Option<u8>,
+}
+
+impl CollectorDesc {
+    /// The desc among a collector's file's header chunks ([`crate::Gbx::header_chunks`], [`crate::pak::Header`]),
+    /// `None` when they hold none. Its chunk is a scope of its own for ids.
+    pub fn read(header_chunks: &[HeaderChunk<'_>]) -> Result<Option<CollectorDesc>> {
+        let Some(&HeaderChunk { offset, bytes, .. }) = header_chunks.iter().find(|c| c.id == 0x0301_A003)
+        else {
+            return Ok(None);
+        };
+        let mut st = State::new(NodeTable::new(0, Vec::new()));
+        let mut r = Archive::new(bytes, offset, Space::File, &mut st);
+        let ident = r.ident()?;
+        let version = r.u32()?;
+        if !(1..=8).contains(&version) {
+            return Err(r.bad(format!("collector desc version {version}, which is not read")));
+        }
+        let mut d = CollectorDesc {
+            ident,
+            version,
+            page_name: r.string()?,
+            ..CollectorDesc::default()
+        };
+        if version == 5 {
+            d.u05 = Some(r.id()?);
+        }
+        if version >= 4 {
+            d.parent = Some(r.id()?);
+        }
+        if version <= 2 {
+            d.u01 = Some(r.bool()?);
+        }
+        if version == 2 {
+            d.is_internal = Some(r.bool()?);
+        }
+        if version >= 3 {
+            d.flags = Some(r.i32()?);
+        }
+        if version >= 2 {
+            d.catalog_position = Some(r.i16()?);
+        }
+        if (2..=5).contains(&version) {
+            d.available = Some((r.u8()?, r.i32()?, r.i16()?));
+        }
+        if version >= 7 {
+            d.name = Some(r.string()?);
+        }
+        if version >= 8 {
+            d.prod_state = Some(r.u8()?);
+        }
+        r.end("header chunk 0x0301a003")?;
+        Ok(Some(d))
     }
 }

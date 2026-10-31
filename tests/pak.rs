@@ -340,3 +340,76 @@ fn every_reference_of_the_packs_names_a_game_file() {
     );
     assert!(missing.is_empty());
 }
+
+/// Every pack file's head reads alone ([`Pak::header`]), and every collector desc (header chunk `0x0301A003`) in
+/// them reads to its end; a collector whose body reads names the same ident in its body (chunk `0x0301A00B`).
+#[test]
+fn every_collector_desc_reads_and_names_its_body_ident() {
+    use gbx_formats::Node;
+    use gbx_formats::game::collector::{Collector, CollectorDesc};
+    let Some(packs) = install_file(Game::Tmnf, "Packs") else {
+        return;
+    };
+    let list = PackList::parse(&std::fs::read(packs.join("packlist.dat")).unwrap()).unwrap();
+    let mut paks: Vec<PathBuf> = std::fs::read_dir(&packs)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pak")))
+        .collect();
+    paks.sort();
+    let (mut heads, mut descs, mut compared, mut differ, mut versions) =
+        (0, 0, 0, Vec::new(), BTreeMap::<u32, usize>::new());
+    for path in paks {
+        let pack = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let pak = Pak::parse(std::fs::read(&path).unwrap(), &list.key(&pack).unwrap().key).unwrap();
+        for file in &pak.files {
+            let Some(header) = pak.header(file).unwrap() else {
+                continue;
+            };
+            heads += 1;
+            let Some(desc) = CollectorDesc::read(&header.header_chunks()).unwrap() else {
+                continue;
+            };
+            descs += 1;
+            *versions.entry(desc.version).or_default() += 1;
+            let Ok(bytes) = pak.read(file) else {
+                continue;
+            };
+            let nodes = gbx_formats::Gbx::parse(&bytes).unwrap().nodes().unwrap();
+            let collector: Option<&Collector> = match nodes.main() {
+                Node::BlockInfoClassic(b) => Some(&b.collector),
+                Node::BlockInfoFlat(b) => Some(&b.collector),
+                Node::BlockInfoRectAsym(b) => Some(&b.collector),
+                Node::BlockInfoRoad(b) => Some(&b.collector),
+                Node::BlockInfoClip(b) => Some(&b.collector),
+                Node::BlockInfoFrontier(b) => Some(&b.collector),
+                Node::BlockInfoPylon(b) => Some(&b.collector),
+                Node::Decoration(d) => Some(&d.collector),
+                _ => None,
+            };
+            if let Some(ident) = collector.and_then(|c| c.ident.as_ref()) {
+                compared += 1;
+                if *ident != desc.ident {
+                    differ.push(format!(
+                        "{pack}\\{}: {ident:?} / {:?}",
+                        pak.path(file),
+                        desc.ident
+                    ));
+                }
+            }
+        }
+    }
+    for d in &differ {
+        eprintln!("DIFFERS {d}");
+    }
+    eprintln!(
+        "{heads} heads, {descs} collector descs (by version {versions:?}), {compared} compared with their body"
+    );
+    inputs::expect_found(
+        inputs::Query::Install(Game::Tmnf, Some("Packs")),
+        "collector descs",
+        descs,
+    );
+    assert!(differ.is_empty());
+    assert!(compared > 0);
+}

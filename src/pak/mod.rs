@@ -38,7 +38,7 @@ pub(crate) mod stream;
 
 use crate::archive::{Archive, State};
 use crate::error::{Result, Space, bad};
-use crate::gbx::{Compression, RefTable, body_nodes, head, node_table};
+use crate::gbx::{Compression, HeaderChunk, RefTable, body_nodes, head, node_table};
 use crate::node::NodeTable;
 use blowfish::Blowfish;
 use primase_foundations::hash::md5;
@@ -469,6 +469,30 @@ impl Pak {
         Ok(Some(head(&mut r)?.ref_table))
     }
 
+    /// A Gbx file's header chunks (what the game lists before reading the file: a collector's desc, a map's
+    /// description), read from its head alone like [`Pak::ref_table`]. `None` for a file that is not a Gbx file.
+    pub fn header(&self, file: &PakFile) -> Result<Option<Header>> {
+        let mut stream = self.open(file)?;
+        let size = stream.size();
+        if file.class_id == 0 || size < 3 || stream.read(0, 3)? != b"GBX" {
+            return Ok(None);
+        }
+        let mut st = State::new(NodeTable::new(0, Vec::new()));
+        st.stream = Some(stream);
+        let mut r = Archive::stream(size, &mut st);
+        let head = head(&mut r)?;
+        let end = r.here();
+        let mut stream = st
+            .stream
+            .take()
+            .ok_or_else(|| bad(Space::File, size, "the pack stream was lost"))?;
+        Ok(Some(Header {
+            class_id: head.class_id,
+            bytes: stream.read(0, end)?.to_vec(),
+            chunks: head.header_chunks,
+        }))
+    }
+
     /// A file's plaintext. A Gbx file is decrypted as its nodes are read (see the module documentation), so this
     /// refuses one that holds a node of a class this crate does not read, or a chunk it cannot skip.
     pub fn read(&self, file: &PakFile) -> Result<Vec<u8>> {
@@ -493,5 +517,34 @@ impl Pak {
             .take()
             .ok_or_else(|| bad(Space::File, size, "the pack stream was lost"))?;
         stream.finish()
+    }
+}
+
+/// A pack file's head as [`Pak::header`] reads it: the container up to its body.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Header {
+    /// The main node's class id, as stored.
+    pub class_id: u32,
+    /// The head's plaintext.
+    bytes: Vec<u8>,
+    /// Each header chunk's id, heavy bit, and data's offset and length.
+    chunks: Vec<(u32, bool, usize, usize)>,
+}
+
+impl Header {
+    /// The header chunks, in order.
+    pub fn header_chunks(&self) -> Vec<HeaderChunk<'_>> {
+        self.chunks
+            .iter()
+            .map(|&(id, heavy, offset, len)| HeaderChunk {
+                id,
+                heavy,
+                offset,
+                bytes: self
+                    .bytes
+                    .get(offset..offset.saturating_add(len))
+                    .unwrap_or_default(),
+            })
+            .collect()
     }
 }
