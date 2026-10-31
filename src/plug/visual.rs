@@ -313,7 +313,7 @@ impl VisualIndexedTriangles {
     }
 }
 
-/// How a sprite is drawn (`CPlugVisualSprite.ERenderMode`).
+/// How a sprite is drawn (`CPlugVisualSprite.ERenderMode`), the low three bits of the sprite flags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderMode {
     /// Value 0: a quad facing the camera.
@@ -323,19 +323,17 @@ pub enum RenderMode {
 }
 
 /// A sprite mesh (`CPlugVisualSprite`, class `0x09010000`): the vertices are the sprites' centers, and their normal
-/// slot holds each sprite's size and rotation (the geometry flags' packed-normal bit does not apply to it).
+/// slot holds each sprite's size and rotation as three floats (the geometry flags' packed-normal bit, set in every
+/// file read, does not apply to it).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VisualSprite {
     /// The `CPlugVisual` base.
     pub visual: VisualData,
     /// The `CPlugVisual3D` base.
     pub visual_3d: Visual3DData,
-    /// Chunks `0x09010000` and `0x09010001`: the render mode.
-    pub render_mode: Option<RenderMode>,
-    /// Chunk `0x09010001`: whether the sprites are sorted back to front.
-    pub sort_back_to_front: Option<bool>,
-    /// Chunks `0x09010002` and `0x09010005`: the sprite flags. GBX.NET names bits 0 to 2 the render mode, 4 sort back to
-    /// front, 3 radius in screen space, 5 use the global direction and 6 use the texture atlas.
+    /// Chunk `0x09010005`: the sprite flags (`0x41` in every file read). See [`VisualSprite::render_mode`]; GBX.NET
+    /// names bit 3 radius in screen space, bit 4 sort back to front, bit 5 use the global direction and bit 6 use the
+    /// texture atlas.
     pub sprite_flags: Option<u32>,
     /// Chunk `0x09010005`: the global direction, used with flag bit 5.
     pub global_direction: Option<[f32; 3]>,
@@ -347,16 +345,21 @@ pub struct VisualSprite {
     pub chunks: Chunks,
 }
 
-fn render_mode(r: &mut Archive<'_, '_>) -> Result<RenderMode> {
-    let at = r.here();
-    match r.u32()? {
-        0 => Ok(RenderMode::Quad),
-        1 => Ok(RenderMode::RotatedQuad),
-        other => Err(r.bad_at(at, format!("sprite render mode {other}"))),
-    }
-}
-
 impl VisualSprite {
+    /// The render mode in the sprite flags: `None` without flags or for a value that names no mode.
+    pub fn render_mode(&self) -> Option<RenderMode> {
+        match self.sprite_flags? & 7 {
+            0 => Some(RenderMode::Quad),
+            1 => Some(RenderMode::RotatedQuad),
+            _ => None,
+        }
+    }
+
+    /// Whether the sprite flags' bit 4 (sort back to front) is set; `None` without flags.
+    pub fn sort_back_to_front(&self) -> Option<bool> {
+        self.sprite_flags.map(|f| f & 0x10 != 0)
+    }
+
     pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<VisualSprite> {
         let mut n = VisualSprite::default();
         n.chunks = r.chunks("CPlugVisualSprite", |r, id| {
@@ -364,12 +367,6 @@ impl VisualSprite {
                 return Ok(true);
             }
             match id {
-                0x0901_0000 => n.render_mode = Some(render_mode(r)?),
-                0x0901_0001 => {
-                    n.render_mode = Some(render_mode(r)?);
-                    n.sort_back_to_front = Some(r.bool()?);
-                }
-                0x0901_0002 => n.sprite_flags = Some(r.u32()?),
                 0x0901_0005 => {
                     n.sprite_flags = Some(r.u32()?);
                     n.global_direction = Some(r.vec3()?);

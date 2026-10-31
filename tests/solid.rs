@@ -80,9 +80,8 @@ fn body() -> Vec<u8> {
     f32s(&mut b, &[4.0, 5.0, 6.0, 1.0, 0.0, 2.0]);
     u32s(&mut b, &[0x0000_00FF]);
     u32s(&mut b, &[0, 0]); // no tangents, no bitangents
-    // rotated quads sorted back to front, then the flags, the direction and the pivot, then the atlas grid
-    u32s(&mut b, &[0x0901_0001, 1, 1]);
-    u32s(&mut b, &[0x0901_0005, 0x30]);
+    // the flags, the direction and the pivot, then the atlas grid
+    u32s(&mut b, &[0x0901_0005, 0x31]);
     f32s(&mut b, &[0.0, 1.0, 0.0, 0.5, 0.5]);
     u32s(&mut b, &[0x0901_0006, 0x0003_0002]);
     u32s(&mut b, &[FACADE]);
@@ -209,9 +208,9 @@ fn a_hand_built_solid_reads() {
     );
 
     let sprite: &VisualSprite = get(&nodes, 3);
-    assert_eq!(sprite.render_mode, Some(RenderMode::RotatedQuad));
-    assert_eq!(sprite.sort_back_to_front, Some(true));
-    assert_eq!(sprite.sprite_flags, Some(0x30));
+    assert_eq!(sprite.sprite_flags, Some(0x31));
+    assert_eq!(sprite.render_mode(), Some(RenderMode::RotatedQuad));
+    assert_eq!(sprite.sort_back_to_front(), Some(true));
     assert_eq!(sprite.global_direction, Some([0.0, 1.0, 0.0]));
     assert_eq!(sprite.pivot_point, Some([0.5, 0.5]));
     assert_eq!(sprite.atlas_grid, Some([2, 3]));
@@ -292,14 +291,9 @@ fn patched(from: &[u32], to: &[u32]) -> Vec<u8> {
 }
 
 #[test]
-fn spheres_and_ellipsoids_read() {
+fn ellipsoids_read_and_spheres_are_refused() {
     let bits = |v: &[f32]| v.iter().map(|f| f.to_bits()).collect::<Vec<_>>();
     let box_shape = [&[6u32][..], &bits(&[1.0, 2.0, 3.0, 0.5, 0.5, 0.5])].concat();
-    let sphere = [&[0u32][..], &bits(&[2.5])].concat();
-    let nodes = read(&patched(&box_shape, &sphere)).unwrap();
-    let geom: &SurfaceGeom = get(&nodes, 5);
-    assert_eq!(geom.surf, Some(Surf::Sphere { size: 2.5 }));
-    assert_eq!(geom.surface_id, Some(4));
     let ellipsoid = [&[1u32][..], &bits(&[1.0, 2.0, 3.0])].concat();
     let nodes = read(&patched(&box_shape, &ellipsoid)).unwrap();
     let geom: &SurfaceGeom = get(&nodes, 5);
@@ -309,6 +303,10 @@ fn spheres_and_ellipsoids_read() {
             size: [1.0, 2.0, 3.0]
         })
     );
+    assert_eq!(geom.surface_id, Some(4));
+    let sphere = [&[0u32][..], &bits(&[2.5])].concat();
+    let e = read(&patched(&box_shape, &sphere)).unwrap_err().to_string();
+    assert!(e.contains("collision shape type 0"), "{e}");
 }
 
 #[test]
@@ -327,12 +325,12 @@ fn refusals() {
         patched(&[0x0900_5010, NONE], &[0x0900_5999, NONE]),
         "chunk 0x09005999 of CPlugSolid",
     );
-    // a sprite render mode that names no mode
+    // a sprite chunk of an older game
     refused(
-        patched(&[0x0901_0001, 1, 1], &[0x0901_0001, 2, 1]),
-        "sprite render mode 2",
+        patched(&[0x0901_0005, 0x31], &[0x0901_0002, 0x31]),
+        "chunk 0x09010002 of CPlugVisualSprite",
     );
-    // a sprite's chunk before the geometry it needs
+    // a chunk of the sprite's bases this crate does not read
     refused(
         patched(&[0x0900_600E, 0x3F8], &[0x0900_6999, 0x3F8]),
         "chunk 0x09006999 of CPlugVisualSprite",
@@ -351,7 +349,7 @@ fn refusals() {
     );
 }
 
-/// A decorator solid with two decorators: the first of the newest chunk, the second of the oldest.
+/// A decorator solid with two decorators, both of chunk `0x090A2009`.
 fn decorators() -> Vec<u8> {
     let mut b = Vec::new();
     u32s(&mut b, &[0x090A_3000, 10, 2]);
@@ -363,15 +361,18 @@ fn decorators() -> Vec<u8> {
         &[
             2,
             0x090A_2000,
-            0x090A_2006,
+            0x090A_2009,
             NONE,
             NONE,
             NONE,
+            0,
             5,
             0,
             3,
             0,
             1,
+            1,
+            0,
             FACADE,
         ],
     );
@@ -390,24 +391,27 @@ fn decorators_read() {
         solid.tree_decorators,
         Some(vec![Some(NodeIndex(1)), Some(NodeIndex(2))])
     );
-    let newest: &DecoratorTree = get(&nodes, 1);
-    assert_eq!(newest.tree_id, Some(Id::Name("High".into())));
-    assert_eq!(newest.exist_cond, Some(6));
-    assert_eq!(newest.visible_cond, Some(4));
-    assert_eq!(newest.visible_apply_on_childs, Some(true));
-    assert_eq!(newest.shadow_caster_cond, Some(4));
-    assert_eq!(newest.shadow_caster_apply_on_childs, Some(true));
-    assert_eq!(newest.transform_visual_to_surface, Some(true));
-    assert_eq!(newest.no_location, Some(false));
-    assert_eq!(newest.collidable_cond, Some(2));
-    let oldest: &DecoratorTree = get(&nodes, 2);
-    assert_eq!(oldest.tree_id, Some(Id::Empty));
-    assert_eq!(oldest.exist_cond, None);
-    assert_eq!(oldest.visible_cond, Some(5));
-    assert_eq!(oldest.transform_visual_to_surface, Some(true));
-    assert_eq!((oldest.no_location, oldest.collidable_cond), (None, None));
+    let first: &DecoratorTree = get(&nodes, 1);
+    assert_eq!(first.tree_id, Some(Id::Name("High".into())));
+    assert_eq!(first.exist_cond, Some(6));
+    assert_eq!(first.visible_cond, Some(4));
+    assert_eq!(first.visible_apply_on_childs, Some(true));
+    assert_eq!(first.shadow_caster_cond, Some(4));
+    assert_eq!(first.shadow_caster_apply_on_childs, Some(true));
+    assert_eq!(first.transform_visual_to_surface, Some(true));
+    assert_eq!(first.no_location, Some(false));
+    assert_eq!(first.collidable_cond, Some(2));
+    let second: &DecoratorTree = get(&nodes, 2);
+    assert_eq!(second.tree_id, Some(Id::Empty));
+    assert_eq!(second.exist_cond, Some(0));
+    assert_eq!(second.visible_cond, Some(5));
+    assert_eq!(second.transform_visual_to_surface, Some(true));
+    assert_eq!(
+        (second.no_location, second.collidable_cond),
+        (Some(true), Some(0))
+    );
 
-    // every truncation, a deprecated-list version that is not 10, and a chunk the decorator does not have
+    // every truncation, a deprecated-list version that is not 10, and an older chunk of the decorator
     let whole = decorators();
     for n in 0..whole.len() {
         assert!(
@@ -426,13 +430,13 @@ fn decorators_read() {
         .unwrap_err();
     assert!(e.to_string().contains("tree decorators version 9"), "{e}");
     let mut other_chunk = whole;
-    other_chunk[20..24].copy_from_slice(&0x090A_200Au32.to_le_bytes());
+    other_chunk[20..24].copy_from_slice(&0x090A_2006u32.to_le_bytes());
     let e = Gbx::parse(&file_of(0x090A_3000, &other_chunk))
         .unwrap()
         .nodes()
         .unwrap_err();
     assert!(
-        e.to_string().contains("chunk 0x090a200a of CPlugDecoratorTree"),
+        e.to_string().contains("chunk 0x090a2006 of CPlugDecoratorTree"),
         "{e}"
     );
 }

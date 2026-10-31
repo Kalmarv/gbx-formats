@@ -148,11 +148,6 @@ pub struct CollisionMesh {
 /// these occur in the files read; a surface geometry stores them in the version without a surface index.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Surf {
-    /// Type 0: a sphere, named by one float (`Size` in GBX.NET).
-    Sphere {
-        /// The float stored.
-        size: f32,
-    },
     /// Type 1: an ellipsoid, named by three floats (`Size` in GBX.NET).
     Ellipsoid {
         /// The floats stored.
@@ -258,7 +253,6 @@ fn surf(r: &mut Archive<'_, '_>) -> Result<Option<Surf>> {
     let at = r.here();
     Ok(Some(match r.i32()? {
         -1 => return Ok(None),
-        0 => Surf::Sphere { size: r.f32()? },
         1 => Surf::Ellipsoid { size: r.vec3()? },
         6 => Surf::Box {
             bounds: box_aligned(r)?,
@@ -267,7 +261,9 @@ fn surf(r: &mut Archive<'_, '_>) -> Result<Option<Surf>> {
         other => {
             return Err(r.bad_at(
                 at,
-                format!("collision shape type {other}: only spheres (0), ellipsoids (1), boxes (6) and meshes (7) are read"),
+                format!(
+                    "collision shape type {other}: only ellipsoids (1), boxes (6) and meshes (7) are read"
+                ),
             ));
         }
     }))
