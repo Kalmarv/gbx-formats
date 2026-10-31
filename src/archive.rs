@@ -169,12 +169,20 @@ impl<'a, 's> Archive<'a, 's> {
         self.array().map(u16::from_le_bytes)
     }
 
+    pub(crate) fn i16(&mut self) -> Result<i16> {
+        self.array().map(i16::from_le_bytes)
+    }
+
     pub(crate) fn u32(&mut self) -> Result<u32> {
         self.array().map(u32::from_le_bytes)
     }
 
     pub(crate) fn i32(&mut self) -> Result<i32> {
         self.array().map(i32::from_le_bytes)
+    }
+
+    pub(crate) fn u64(&mut self) -> Result<u64> {
+        self.array().map(u64::from_le_bytes)
     }
 
     pub(crate) fn f32(&mut self) -> Result<f32> {
@@ -187,6 +195,10 @@ impl<'a, 's> Archive<'a, 's> {
 
     pub(crate) fn vec3(&mut self) -> Result<[f32; 3]> {
         Ok([self.f32()?, self.f32()?, self.f32()?])
+    }
+
+    pub(crate) fn vec4(&mut self) -> Result<[f32; 4]> {
+        Ok([self.f32()?, self.f32()?, self.f32()?, self.f32()?])
     }
 
     pub(crate) fn int3(&mut self) -> Result<[i32; 3]> {

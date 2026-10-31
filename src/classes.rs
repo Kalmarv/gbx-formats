@@ -5,6 +5,7 @@ use crate::archive::Archive;
 use crate::error::{Error, Result};
 use crate::game;
 use crate::node::Chunks;
+use crate::plug;
 
 macro_rules! classes {
     ($($(#[$doc:meta])* $variant:ident($ty:path) = $id:literal, $name:literal;)*) => {
@@ -81,4 +82,18 @@ classes! {
     ChallengeParameters(game::collector::ChallengeParameters) = 0x0305_B000, "CGameCtnChallengeParameters";
     /// A block's skin.
     BlockSkin(game::block::BlockSkin) = 0x0305_9000, "CGameCtnBlockSkin";
+    /// A scene tree: a block model's structure.
+    Tree(plug::tree::Tree) = 0x0904_F000, "CPlugTree";
+    /// A scene tree with levels of detail.
+    TreeVisualMip(plug::tree::TreeVisualMip) = 0x0901_5000, "CPlugTreeVisualMip";
+    /// An indexed triangle mesh.
+    VisualIndexedTriangles(plug::visual::VisualIndexedTriangles) = 0x0901_E000, "CPlugVisualIndexedTriangles";
+    /// A material.
+    Material(plug::material::Material) = 0x0907_9000, "CPlugMaterial";
+    /// A material's textures and samplers.
+    MaterialCustom(plug::material::MaterialCustom) = 0x0903_A000, "CPlugMaterialCustom";
+    /// A collision surface.
+    Surface(plug::surface::Surface) = 0x0900_C000, "CPlugSurface";
+    /// A collision geometry.
+    SurfaceGeom(plug::surface::SurfaceGeom) = 0x0900_F000, "CPlugSurfaceGeom";
 }
