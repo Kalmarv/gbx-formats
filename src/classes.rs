@@ -171,4 +171,6 @@ classes! {
     BlockInfoPylon(game::blockinfo::BlockInfoPylon) = 0x0305_5000, "CGameCtnBlockInfoPylon", parent 0x2400_5000;
     /// A block unit.
     BlockUnitInfo(game::blockinfo::BlockUnitInfo) = 0x0303_6000, "CGameCtnBlockUnitInfo", parent 0x0100_1000;
+    /// A solid.
+    Solid(plug::solid::Solid) = 0x0900_5000, "CPlugSolid", parent 0x0902_B000;
 }

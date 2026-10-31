@@ -118,15 +118,66 @@ pub struct VisualData {
     pub geometry: Option<Geometry>,
 }
 
+/// The normals of a mesh: three floats each, or packed into a `u32` (geometry flag bit 7).
+#[derive(Clone, Debug, PartialEq)]
+pub enum VertexNormals {
+    /// Three floats per vertex.
+    Floats(Vec<[f32; 3]>),
+    /// One packed value per vertex; [`unpack_normal`] gives the vector.
+    Packed(Vec<u32>),
+}
+
+/// The colors of a mesh: four floats each, or packed into a `u32` (geometry flag bit 8).
+#[derive(Clone, Debug, PartialEq)]
+pub enum VertexColors {
+    /// Red, green, blue and alpha as floats.
+    Floats(Vec<[f32; 4]>),
+    /// One packed value per vertex; [`unpack_color`] gives the color.
+    Packed(Vec<u32>),
+}
+
+/// The tangents (or bitangents) of a mesh, empty or one per vertex.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Tangents {
+    /// Three floats per vertex.
+    Floats(Vec<[f32; 3]>),
+    /// One `u32` per vertex, stored when geometry flag bit 7 is set; how the value is packed is not known.
+    Packed(Vec<u32>),
+}
+
+impl Default for Tangents {
+    fn default() -> Self {
+        Tangents::Floats(Vec::new())
+    }
+}
+
+/// The normal in a packed value: three signed 10-bit components, x in bits 0 to 9, y in 10 to 19 and z in 20 to 29,
+/// each divided by 511 (the two top bits are not used).
+pub fn unpack_normal(packed: u32) -> [f32; 3] {
+    let component = |shift: u32| {
+        let v = i32::from_le_bytes((packed << shift).to_le_bytes()) >> 22;
+        v as f32 / 511.0
+    };
+    [component(22), component(12), component(2)]
+}
+
+/// The color in a packed value: red in bits 16 to 23, green in 8 to 15, blue in 0 to 7 and alpha in 24 to 31, each
+/// divided by 255.
+pub fn unpack_color(packed: u32) -> [f32; 4] {
+    let component = |shift: u32| ((packed >> shift) & 255) as f32 / 255.0;
+    [component(16), component(8), component(0), component(24)]
+}
+
 /// The vertices of chunk `0x0902C004`, a field per attribute, each with one entry per vertex.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Vertices {
     /// The positions.
     pub positions: Vec<[f32; 3]>,
-    /// The normals.
-    pub normals: Vec<[f32; 3]>,
-    /// The colors (RGBA, floats).
-    pub colors: Vec<[f32; 4]>,
+    /// The normals, when the geometry flags say the vertices have them. (A sprite stores its size and rotation
+    /// in the normal.)
+    pub normals: Option<VertexNormals>,
+    /// The colors, when the geometry flags say the vertices have them.
+    pub colors: Option<VertexColors>,
 }
 
 /// What `CPlugVisual3D` stores.
@@ -137,9 +188,9 @@ pub struct Visual3DData {
     /// Chunk `0x0902C004`: the vertices, absent when the visual has vertex streams.
     pub vertices: Option<Vertices>,
     /// Chunk `0x0902C004`: the tangents, empty or one per vertex.
-    pub tangents: Vec<[f32; 3]>,
+    pub tangents: Tangents,
     /// Chunk `0x0902C004`: the bitangents, empty or one per vertex.
-    pub bitangents: Vec<[f32; 3]>,
+    pub bitangents: Tangents,
 }
 
 /// What `CPlugVisualIndexed` stores.
@@ -162,6 +213,8 @@ pub struct IndexBuffer {
 
 impl IndexBuffer {
     pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<IndexBuffer> {
+        // stored in place, but a pack file's reader starts it like a node of its class
+        r.dummy_write(u32::to_le_bytes(0x0902_B000));
         let mut n = IndexBuffer::default();
         n.chunks = r.chunks("CPlugIndexBuffer", |r, id| {
             match id {
@@ -214,7 +267,7 @@ impl VisualIndexedTriangles {
                 }
                 0x0900_600E => n.visual.geometry = Some(geometry(r)?),
                 0x0902_C002 => n.visual_3d.blend_shapes = Some(r.node_ref()?),
-                0x0902_C004 => vertices(r, n.visual.geometry.as_ref(), &mut n.visual_3d)?,
+                0x0902_C004 => vertices(r, n.visual.geometry.as_ref(), false, &mut n.visual_3d)?,
                 0x0906_A001 => {
                     n.indexed.index_buffer = if r.bool()? {
                         Some(IndexBuffer::read(r)?)
@@ -245,15 +298,6 @@ fn geometry(r: &mut Archive<'_, '_>) -> Result<Geometry> {
         return Err(r.bad_at(
             flags_at,
             format!("geometry flags {:#x}: skinned visuals are not read", flags.0),
-        ));
-    }
-    if flags.packed_normals() || flags.packed_colors() || flags.explicit_attributes() {
-        return Err(r.bad_at(
-            flags_at,
-            format!(
-                "geometry flags {:#x}: packed vertex attributes are not read",
-                flags.0
-            ),
         ));
     }
     let set_count = r.count(4)?;
@@ -294,42 +338,80 @@ fn tex_coord_set(r: &mut Archive<'_, '_>, vertex_count: u32) -> Result<TexCoordS
     Ok(TexCoordSet { uv })
 }
 
-/// Chunk `0x0902C004`: the vertices, tangents and bitangents.
-fn vertices(r: &mut Archive<'_, '_>, geometry: Option<&Geometry>, out: &mut Visual3DData) -> Result<()> {
+/// Chunk `0x0902C004`: the vertices, tangents and bitangents. Which attributes a vertex stores, and how, follow the
+/// geometry flags: without bit 9 normals and colors are both stored, with it only those bits 5 and 6 name.
+fn vertices(
+    r: &mut Archive<'_, '_>,
+    geometry: Option<&Geometry>,
+    sprite: bool,
+    out: &mut Visual3DData,
+) -> Result<()> {
     let Some(g) = geometry else {
         return Err(r.bad("vertices (chunk 0x0902C004) before the geometry header (chunk 0x0900600E)"));
     };
     let n = usize::try_from(g.vertex_count).unwrap_or(usize::MAX);
+    let flags = g.flags;
     if g.vertex_streams.is_empty() {
-        // Each vertex is a position, a normal and a color: the flags' bits 5 and 6 only matter with bit 9, which
-        // is refused above.
-        let each = 12 + 12 + 16;
+        let has_normals = !flags.explicit_attributes() || flags.has_vertex_normals();
+        let has_colors = !flags.explicit_attributes() || flags.has_vertex_colors();
+        // a sprite's normal slot holds floats whatever bit 7 says
+        let packed_normals = flags.packed_normals() && !sprite;
+        let packed_colors = flags.packed_colors();
+        let normal_size = if packed_normals { 4 } else { 12 };
+        let color_size = if packed_colors { 4 } else { 16 };
+        let each = 12usize
+            .saturating_add(if has_normals { normal_size } else { 0 })
+            .saturating_add(if has_colors { color_size } else { 0 });
         if n.checked_mul(each).is_none_or(|bytes| bytes > r.remaining()) {
             return Err(r.bad(format!("{n} vertices do not fit in the chunk")));
         }
         let mut v = Vertices {
             positions: Vec::with_capacity(n),
-            normals: Vec::with_capacity(n),
-            colors: Vec::with_capacity(n),
+            normals: has_normals.then(|| {
+                if packed_normals {
+                    VertexNormals::Packed(Vec::with_capacity(n))
+                } else {
+                    VertexNormals::Floats(Vec::with_capacity(n))
+                }
+            }),
+            colors: has_colors.then(|| {
+                if packed_colors {
+                    VertexColors::Packed(Vec::with_capacity(n))
+                } else {
+                    VertexColors::Floats(Vec::with_capacity(n))
+                }
+            }),
         };
         for _ in 0..n {
             v.positions.push(r.vec3()?);
-            v.normals.push(r.vec3()?);
-            v.colors.push(r.vec4()?);
+            match &mut v.normals {
+                Some(VertexNormals::Floats(f)) => f.push(r.vec3()?),
+                Some(VertexNormals::Packed(p)) => p.push(r.u32()?),
+                None => {}
+            }
+            match &mut v.colors {
+                Some(VertexColors::Floats(f)) => f.push(r.vec4()?),
+                Some(VertexColors::Packed(p)) => p.push(r.u32()?),
+                None => {}
+            }
         }
         out.vertices = Some(v);
     }
-    out.tangents = tangents(r, n)?;
-    out.bitangents = tangents(r, n)?;
+    out.tangents = tangents(r, n, flags.packed_normals())?;
+    out.bitangents = tangents(r, n, flags.packed_normals())?;
     Ok(())
 }
 
-/// A tangent array: a count that is 0 or the vertex count, and that many vectors.
-fn tangents(r: &mut Archive<'_, '_>, vertex_count: usize) -> Result<Vec<[f32; 3]>> {
+/// A tangent array: a count that is 0 or the vertex count, and that many vectors (or packed values).
+fn tangents(r: &mut Archive<'_, '_>, vertex_count: usize, packed: bool) -> Result<Tangents> {
     let at = r.here();
-    let count = r.count(12)?;
+    let count = r.count(if packed { 4 } else { 12 })?;
     if count != 0 && count != vertex_count {
         return Err(r.bad_at(at, format!("{count} tangents for {vertex_count} vertices")));
     }
-    (0..count).map(|_| r.vec3()).collect()
+    Ok(if packed {
+        Tangents::Packed((0..count).map(|_| r.u32()).collect::<Result<_>>()?)
+    } else {
+        Tangents::Floats((0..count).map(|_| r.vec3()).collect::<Result<_>>()?)
+    })
 }
