@@ -16,7 +16,7 @@
 
 use crate::archive::{Archive, State};
 use crate::error::{Result, Space, bad};
-use crate::node::{NodeTable, Nodes};
+use crate::node::{NodeIndex, NodeTable, Nodes};
 use primase_foundations::compress::{Decompressor, Lzo1x};
 use std::borrow::Cow;
 
@@ -90,6 +90,41 @@ pub struct RefTable {
     pub folders: Vec<Folder>,
     /// The external nodes.
     pub external: Vec<External>,
+}
+
+impl RefTable {
+    /// The external node a reference names: `None` for an index the table does not list (a node of the body).
+    pub fn external(&self, index: NodeIndex) -> Option<&External> {
+        self.external.iter().find(|e| e.node_index == index.0)
+    }
+
+    /// The path of the file `external` names, from the path of the file whose table this is (`\`-separated, as
+    /// packs store paths): [`RefTable::ancestor_level`] folders up from that file's folder, then the external's
+    /// folders and name. `None` for a resource, or for a table that climbs above the top of `from`.
+    pub fn file_path(&self, external: &External, from: &str) -> Option<String> {
+        let ExternalTarget::File { name, folder } = &external.target else {
+            return None;
+        };
+        let mut path: Vec<&str> = from.split(['\\', '/']).collect();
+        // the file's own name, then the folders the table climbs
+        path.pop();
+        for _ in 0..self.ancestor_level {
+            path.pop()?;
+        }
+        let mut below = Vec::new();
+        let mut at = *folder;
+        while let Some(f) = at.and_then(|i| self.folders.get(i)) {
+            // a folder's parents cannot outnumber the folders (a cycle would)
+            if below.len() >= self.folders.len() {
+                return None;
+            }
+            below.push(f.name.as_str());
+            at = f.parent;
+        }
+        path.extend(below.iter().rev());
+        path.push(name);
+        Some(path.join("\\"))
+    }
 }
 
 /// The body as stored.
@@ -384,4 +419,64 @@ fn header_chunks(user_data: &[u8], origin: usize) -> Result<Vec<(u32, bool, usiz
     }
     r.end("the user data")?;
     Ok(chunks)
+}
+
+#[cfg(test)]
+#[allow(clippy::indexing_slicing, reason = "a test over a table it builds")]
+mod tests {
+    use super::{External, ExternalTarget, Folder, RefTable};
+
+    fn file(name: &str, folder: Option<usize>) -> External {
+        External {
+            flags: 1,
+            target: ExternalTarget::File {
+                name: name.to_owned(),
+                folder,
+            },
+            node_index: 2,
+            use_file: true,
+        }
+    }
+
+    /// A block info two folders below `Stadium` naming a solid under `Stadium\Media\Solid\Road`, as the Stadium
+    /// pack's block infos do; a table that climbs past the top, and a resource, name no file.
+    #[test]
+    fn a_reference_resolves_from_the_naming_file() {
+        let table = RefTable {
+            ancestor_level: 2,
+            folders: vec![
+                Folder {
+                    name: "Media".into(),
+                    parent: None,
+                },
+                Folder {
+                    name: "Solid".into(),
+                    parent: Some(0),
+                },
+                Folder {
+                    name: "Road".into(),
+                    parent: Some(1),
+                },
+            ],
+            external: vec![file("Base.Solid.Gbx", Some(2)), file("Top.Gbx", None)],
+        };
+        let from = r"Stadium\ConstructionBlockInfo\ConstructionBlockInfoRoad\Road.TMEDRoad.Gbx";
+        assert_eq!(
+            table.file_path(&table.external[0], from).as_deref(),
+            Some(r"Stadium\Media\Solid\Road\Base.Solid.Gbx")
+        );
+        assert_eq!(
+            table.file_path(&table.external[1], from).as_deref(),
+            Some(r"Stadium\Top.Gbx")
+        );
+        assert_eq!(
+            table.file_path(&table.external[0], r"Stadium\Road.TMEDRoad.Gbx"),
+            None
+        );
+        let resource = External {
+            target: ExternalTarget::Resource(3),
+            ..file("", None)
+        };
+        assert_eq!(table.file_path(&resource, from), None);
+    }
 }

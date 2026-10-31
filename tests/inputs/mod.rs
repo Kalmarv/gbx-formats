@@ -29,6 +29,12 @@ primase_testdata::inputs! {
         },
     }
     declared {
+        Query::Install(Game::Tmnf, Some("GameData")) => {
+            status: Live,
+            gate: false,
+            about: r#"the install's `GameData` folder: the files the game reads loose, beside the packs (textures `.dds`/`.tga`, `.zip` archives, sounds, the stock maps under `Tracks`)"#,
+            source: r#"the user's own install"#,
+        },
         Query::Install(Game::Tmnf, Some("Packs")) => {
             status: Live,
             gate: false,

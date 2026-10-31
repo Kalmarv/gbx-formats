@@ -204,3 +204,139 @@ fn pack_files_read_through_their_nodes_as_gbx_net_extracts_them() {
     );
     assert_eq!(same + refused, files);
 }
+
+/// The game's files as its own file system sees them: the install's `GameData` folder and the packs over it, each
+/// pack's paths from the same root (`Stadium\Media\...` may be in `Game.pak`, `Stadium.pak` or a loose file).
+struct GameFiles {
+    paks: Vec<(String, Pak)>,
+    /// Every loose file under `GameData`, by its lowercased `\`-separated path.
+    loose: HashMap<String, PathBuf>,
+}
+
+/// Where a path of the game's file system is.
+enum Found<'a> {
+    Pack(&'a Pak, &'a PakFile),
+    Loose(&'a Path),
+}
+
+impl GameFiles {
+    fn open(packs: &Path, game_data: &Path) -> GameFiles {
+        let list = PackList::parse(&std::fs::read(packs.join("packlist.dat")).unwrap()).unwrap();
+        let mut paks = Vec::new();
+        for e in std::fs::read_dir(packs).unwrap() {
+            let path = e.unwrap().path();
+            if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pak")) {
+                let name = path.file_stem().unwrap().to_string_lossy().into_owned();
+                let key = list.key(&name).unwrap();
+                paks.push((name, Pak::parse(std::fs::read(&path).unwrap(), &key.key).unwrap()));
+            }
+        }
+        paks.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut loose = HashMap::new();
+        let mut stack = vec![game_data.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for e in std::fs::read_dir(&dir).unwrap() {
+                let p = e.unwrap().path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else {
+                    let rel = p.strip_prefix(game_data).unwrap().to_string_lossy();
+                    loose.insert(rel.replace('/', "\\").to_lowercase(), p.clone());
+                }
+            }
+        }
+        GameFiles { paks, loose }
+    }
+
+    fn find(&self, path: &str) -> Option<Found<'_>> {
+        self.paks
+            .iter()
+            .find_map(|(_, p)| p.find(path).map(|f| Found::Pack(p, f)))
+            .or_else(|| {
+                self.loose
+                    .get(&path.replace('/', "\\").to_lowercase())
+                    .map(|p| Found::Loose(p))
+            })
+    }
+}
+
+/// A pack file's stored name is its real one (not [`gbx_formats::pak::name_hash`]'s 34 hex digits).
+fn real_name(file: &PakFile) -> bool {
+    !(file.name.len() == 34 && file.name.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// Following the reference tables from every pack file stored under its real name, and from every file they reach:
+/// each file named (resolved from the naming file's path, [`gbx_formats::RefTable::file_path`]) is in the game's
+/// file system (a pack or a loose file of `GameData`).
+#[test]
+fn every_reference_of_the_packs_names_a_game_file() {
+    let (Some(packs), Some(game_data)) = (
+        install_file(Game::Tmnf, "Packs"),
+        install_file(Game::Tmnf, "GameData"),
+    ) else {
+        return;
+    };
+    let files = GameFiles::open(&packs, &game_data);
+    let mut queue: Vec<String> = files
+        .paks
+        .iter()
+        .flat_map(|(_, p)| p.files.iter().filter(|f| real_name(f)).map(|f| p.path(f)))
+        .collect();
+    let mut seen: std::collections::HashSet<String> = queue.iter().map(|p| p.to_lowercase()).collect();
+    let (mut tables, mut references, mut resources, mut missing) = (0, 0, 0, Vec::new());
+    // the pack files reached, by their stored paths
+    let mut reached = std::collections::HashSet::new();
+    while let Some(from) = queue.pop() {
+        let table = match files.find(&from) {
+            Some(Found::Pack(pak, file)) => {
+                reached.insert(pak.path(file));
+                pak.ref_table(file).unwrap()
+            }
+            Some(Found::Loose(path)) => {
+                let bytes = std::fs::read(path).unwrap();
+                if bytes.starts_with(b"GBX") {
+                    Some(gbx_formats::Gbx::parse(&bytes).unwrap().ref_table)
+                } else {
+                    None
+                }
+            }
+            None => unreachable!("{from} was found before it was queued"),
+        };
+        let Some(table) = table else {
+            continue;
+        };
+        tables += 1;
+        for external in &table.external {
+            let Some(path) = table.file_path(external, &from) else {
+                resources += 1;
+                continue;
+            };
+            references += 1;
+            if files.find(&path).is_none() {
+                missing.push(format!("{from} -> {path}"));
+            } else if seen.insert(path.to_lowercase()) {
+                queue.push(path);
+            }
+        }
+    }
+    let unreached = files
+        .paks
+        .iter()
+        .flat_map(|(_, p)| p.files.iter().filter(|f| !real_name(f)).map(|f| p.path(f)))
+        .filter(|stored| !reached.contains(stored))
+        .count();
+    for m in &missing {
+        eprintln!("MISSING {m}");
+    }
+    eprintln!(
+        "{tables} reference tables: {references} file references, {resources} resources, {} missing; \
+         {unreached} pack files under a hashed name no reference reaches",
+        missing.len()
+    );
+    inputs::expect_found(
+        inputs::Query::Install(Game::Tmnf, Some("Packs")),
+        "reference tables",
+        tables,
+    );
+    assert!(missing.is_empty());
+}

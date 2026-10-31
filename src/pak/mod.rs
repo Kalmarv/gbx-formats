@@ -38,7 +38,7 @@ pub(crate) mod stream;
 
 use crate::archive::{Archive, State};
 use crate::error::{Result, Space, bad};
-use crate::gbx::{Compression, body_nodes, head, node_table};
+use crate::gbx::{Compression, RefTable, body_nodes, head, node_table};
 use crate::node::NodeTable;
 use blowfish::Blowfish;
 use primase_foundations::hash::md5;
@@ -453,6 +453,20 @@ impl Pak {
             size,
             file.is_compressed(),
         )
+    }
+
+    /// A Gbx file's reference table (the files its body names), read from its head alone: no node is read, so it
+    /// needs none of the file's classes. `None` for a file that is not a Gbx file.
+    pub fn ref_table(&self, file: &PakFile) -> Result<Option<RefTable>> {
+        let mut stream = self.open(file)?;
+        let size = stream.size();
+        if file.class_id == 0 || size < 3 || stream.read(0, 3)? != b"GBX" {
+            return Ok(None);
+        }
+        let mut st = State::new(NodeTable::new(0, Vec::new()));
+        st.stream = Some(stream);
+        let mut r = Archive::stream(size, &mut st);
+        Ok(Some(head(&mut r)?.ref_table))
     }
 
     /// A file's plaintext. A Gbx file is decrypted as its nodes are read (see the module documentation), so this

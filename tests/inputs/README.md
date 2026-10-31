@@ -27,6 +27,7 @@ fails when they differ); [the README](../../README.md#running-the-tests) says ho
 
 | key | status | gate | about | source |
 | --- | --- | --- | --- | --- |
+| `installs.tmnf/GameData` | live | - | the install's `GameData` folder: the files the game reads loose, beside the packs (textures `.dds`/`.tga`, `.zip` archives, sounds, the stock maps under `Tracks`) | the user's own install |
 | `installs.tmnf/Packs` | live | - | the install's `Packs` folder: `packlist.dat` (the packs' keys) and `Game.pak`, `Resource.pak`, `Stadium.pak` (NadeoPak version 3; 614, 27 and 1,931 files) | the user's own install |
 | `oracles.corpus.tmnf/tmx-2026-top` | live | - | the 100 most downloaded TrackMania Nations Forever maps uploaded to TrackMania Exchange in 2026 (`<TrackId>.Gbx`, 32 MB) | tmnf.exchange `api/tracks` ordered by downloads, uploaded after 2026-01-01; each from `trackgbx/<TrackId>` |
 | `oracles.gbxnet.tmnf/tmx-2026-top` | live | - | GBX.NET 2.5.0's reading of each corpus map: `maps.jsonl` (one line per map: container, chunk ids, node and chunk census, map fields, blocks) and `decompressed/<file>` (the map with its body decompressed by GBX.NET.LZO) | the gbxnet-dump harness (GBX.NET 2.5.0, GBX.NET.LZO 2.1.6) over the corpus maps |
