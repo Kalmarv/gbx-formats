@@ -58,7 +58,13 @@ fn block(b: &Block, version: u32, nodes: &Nodes) -> Value {
             (id(author), skin.unwrap_or(Value::Null))
         }
     };
-    json!({"name": id(&b.name), "dir": b.direction, "coord": coord, "flags": b.flags as i32, "author": author,
+    // GBX.NET reads version 0's 16-bit flags as a signed short, so a skin (bit 15) makes them negative there
+    let flags = if version == 0 {
+        i32::from(b.flags as u16 as i16)
+    } else {
+        b.flags as i32
+    };
+    json!({"name": id(&b.name), "dir": b.direction, "coord": coord, "flags": flags, "author": author,
            "skin": skin})
 }
 
@@ -153,7 +159,8 @@ fn compare(path: &Path, want: &Value, decompressed: &Path, failures: &mut Vec<St
         .and_then(|p| p.challenge_parameters)
         .map(|p| nodes.get(p).unwrap().try_into().unwrap());
     let medals = params.and_then(|p| p.medals).map_or(desc.medals, |(m, _)| m);
-    let time = |v: Option<u32>| v.map_or(Value::Null, |t| json!(t));
+    // GBX.NET reads the times as signed
+    let time = |v: Option<u32>| v.map_or(Value::Null, |t| json!(t as i32));
     check("bronze", time(medals.bronze), &m["bronze"]);
     check("silver", time(medals.silver), &m["silver"]);
     check("gold", time(medals.gold), &m["gold"]);
