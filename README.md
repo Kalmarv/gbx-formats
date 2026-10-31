@@ -18,6 +18,11 @@ It reads, from bytes you give it:
   fades, 2D/3D triangle animation, color/bloom/depth/motion effects, similarity effects and real key functions.
   `game::media` keeps their fields and node references; `Clips` and `Challenge` resolve clip references through
   typed accessors. Derived triangle and real-function nodes read the base classes' chunk ids.
+- **TMUnlimiter** (`game::unlimiter`, `game::parameters`): the data TMUnlimiter 2.x writes into a map's chunks
+  `0x3F001001` to `0x3F001003` (versions 1, 6 and 7: the real blocks, trigger, external and embedded blocks, motion,
+  parameter sets, trigger groups, block groups, embedded images and block models) and the encrypted
+  `0x3F001000`. The embedded block models are `plug` nodes (trees, meshes, materials, collision surfaces); the files
+  they name are nodes the body never reads. A module of AngelScript bytecode is refused, as GBX.NET refuses it.
 
 It was written against the 100 most downloaded TrackMania Nations Forever maps uploaded to TrackMania Exchange in
 2026, checked field by field against [GBX.NET](https://github.com/BigBang1112/gbx-net) 2.5.0. Used by

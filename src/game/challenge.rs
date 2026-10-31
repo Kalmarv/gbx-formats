@@ -11,6 +11,7 @@ use crate::error::{Result, Space};
 use crate::game::block::Block;
 use crate::game::collector::Medals;
 use crate::game::nullable;
+use crate::game::unlimiter::{EncryptedUnlimiter, Unlimiter};
 use crate::gbx::{Gbx, HeaderChunk};
 use crate::node::{Chunks, NodeIndex, NodeTable};
 
@@ -289,6 +290,10 @@ pub struct Challenge {
     pub password: Option<([u8; 16], u32)>,
     /// `0x0304302A`: whether the map was made in the simple editor.
     pub created_with_simple_editor: Option<bool>,
+    /// `0x3F001001` to `0x3F001003` (skippable): TMUnlimiter's data.
+    pub unlimiter: Option<Unlimiter>,
+    /// `0x3F001000` (skippable, encrypted): TMUnlimiter 1.x's data.
+    pub unlimiter_encrypted: Option<EncryptedUnlimiter>,
     /// The node's chunks.
     pub chunks: Chunks,
 }
@@ -398,10 +403,32 @@ impl Challenge {
                 0x0304_3028 => n.thumbnail_camera = Some(thumbnail_camera(r)?),
                 0x0304_3029 => n.password = Some(r.skippable(|r| Ok((r.array()?, r.u32()?)))?),
                 0x0304_302A => n.created_with_simple_editor = Some(r.bool()?),
+                0x3F00_1000 => n.unlimiter_encrypted = Some(r.skippable(EncryptedUnlimiter::read)?),
+                0x3F00_1001..=0x3F00_1003 => {
+                    let data_version = id.saturating_sub(0x3F00_1001);
+                    n.unlimiter = Some(r.skippable(|r| Unlimiter::read(r, id, data_version))?);
+                }
                 _ => return Ok(false),
             }
             Ok(true)
         })?;
+        if let Some(e) = &n.unlimiter_encrypted {
+            let blocks = n
+                .block_data
+                .as_ref()
+                .or(n.legacy_block_data.as_ref())
+                .map_or(0, |d| d.blocks.len());
+            if let Some(b) = e
+                .blocks
+                .iter()
+                .find(|b| usize::try_from(b.index).map_or(true, |i| i >= blocks))
+            {
+                return Err(r.bad(format!(
+                    "TMUnlimiter block {}: the map has {blocks} blocks",
+                    b.index
+                )));
+            }
+        }
         Ok(n)
     }
 }
