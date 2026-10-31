@@ -8,6 +8,7 @@
 pub mod block;
 pub mod challenge;
 pub mod collector;
+pub mod ghost;
 pub mod media;
 
 use crate::archive::Archive;

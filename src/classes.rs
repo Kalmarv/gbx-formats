@@ -123,4 +123,8 @@ classes! {
     FuncKeys(game::media::FuncKeys) = 0x05002000, "CFuncKeys";
     /// CFuncKeysReal.
     FuncKeysReal(game::media::FuncKeysReal) = 0x0501a000, "CFuncKeysReal";
+    /// A ghost.
+    Ghost(game::ghost::Ghost) = 0x0309_2000, "CGameCtnGhost";
+    /// The MediaTracker block that plays a ghost.
+    MediaBlockGhost(game::ghost::MediaBlockGhost) = 0x030E_5000, "CGameCtnMediaBlockGhost";
 }
