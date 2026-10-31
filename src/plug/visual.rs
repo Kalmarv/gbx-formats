@@ -247,33 +247,179 @@ pub struct VisualIndexedTriangles {
     pub chunks: Chunks,
 }
 
+impl VisualData {
+    /// Reads chunk `id` if it is a `CPlugVisual` chunk this crate reads.
+    pub(crate) fn chunk(&mut self, r: &mut Archive<'_, '_>, id: u32) -> Result<bool> {
+        match id {
+            0x0900_6001 => self.visual_id = Some(r.id()?),
+            0x0900_6004 => self.func_visual = Some(r.node_ref()?),
+            0x0900_6005 => self.sub_visuals = Some(r.list(12, |r| r.int3())?),
+            0x0900_6009 => self.n_patch_tess_level = Some(r.f32()?),
+            0x0900_600B => {
+                self.splits = Some(r.list(32, |r| {
+                    Ok(Split {
+                        index_offset: r.i32()?,
+                        vertex_offset: r.i32()?,
+                        bounding_box: box_aligned(r)?,
+                    })
+                })?);
+            }
+            0x0900_600E => self.geometry = Some(geometry(r)?),
+            _ => return Ok(false),
+        }
+        Ok(true)
+    }
+}
+
+impl Visual3DData {
+    /// Reads chunk `id` if it is a `CPlugVisual3D` chunk this crate reads. `visual` is the `CPlugVisual` base read so
+    /// far, `sprite` whether the node is a `CPlugVisualSprite`.
+    pub(crate) fn chunk(
+        &mut self,
+        r: &mut Archive<'_, '_>,
+        id: u32,
+        visual: &VisualData,
+        sprite: bool,
+    ) -> Result<bool> {
+        match id {
+            0x0902_C002 => self.blend_shapes = Some(r.node_ref()?),
+            0x0902_C004 => vertices(r, visual.geometry.as_ref(), sprite, self)?,
+            _ => return Ok(false),
+        }
+        Ok(true)
+    }
+}
+
 impl VisualIndexedTriangles {
     pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<VisualIndexedTriangles> {
         let mut n = VisualIndexedTriangles::default();
         n.chunks = r.chunks("CPlugVisualIndexedTriangles", |r, id| {
+            if n.visual.chunk(r, id)? || n.visual_3d.chunk(r, id, &n.visual, false)? {
+                return Ok(true);
+            }
             match id {
-                0x0900_6001 => n.visual.visual_id = Some(r.id()?),
-                0x0900_6004 => n.visual.func_visual = Some(r.node_ref()?),
-                0x0900_6005 => n.visual.sub_visuals = Some(r.list(12, |r| r.int3())?),
-                0x0900_6009 => n.visual.n_patch_tess_level = Some(r.f32()?),
-                0x0900_600B => {
-                    n.visual.splits = Some(r.list(32, |r| {
-                        Ok(Split {
-                            index_offset: r.i32()?,
-                            vertex_offset: r.i32()?,
-                            bounding_box: box_aligned(r)?,
-                        })
-                    })?);
-                }
-                0x0900_600E => n.visual.geometry = Some(geometry(r)?),
-                0x0902_C002 => n.visual_3d.blend_shapes = Some(r.node_ref()?),
-                0x0902_C004 => vertices(r, n.visual.geometry.as_ref(), false, &mut n.visual_3d)?,
                 0x0906_A001 => {
                     n.indexed.index_buffer = if r.bool()? {
                         Some(IndexBuffer::read(r)?)
                     } else {
                         None
                     };
+                }
+                _ => return Ok(false),
+            }
+            Ok(true)
+        })?;
+        Ok(n)
+    }
+}
+
+/// How a sprite is drawn (`CPlugVisualSprite.ERenderMode`), the low three bits of the sprite flags.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RenderMode {
+    /// Value 0: a quad facing the camera.
+    Quad,
+    /// Value 1: a quad facing the camera and rotated.
+    RotatedQuad,
+}
+
+/// A sprite mesh (`CPlugVisualSprite`, class `0x09010000`): the vertices are the sprites' centers, and their normal
+/// slot holds each sprite's size and rotation as three floats (the geometry flags' packed-normal bit, set in every
+/// file read, does not apply to it).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct VisualSprite {
+    /// The `CPlugVisual` base.
+    pub visual: VisualData,
+    /// The `CPlugVisual3D` base.
+    pub visual_3d: Visual3DData,
+    /// Chunk `0x09010005`: the sprite flags (`0x41` in every file read). See [`VisualSprite::render_mode`]; GBX.NET
+    /// names bit 3 radius in screen space, bit 4 sort back to front, bit 5 use the global direction and bit 6 use the
+    /// texture atlas.
+    pub sprite_flags: Option<u32>,
+    /// Chunk `0x09010005`: the global direction, used with flag bit 5.
+    pub global_direction: Option<[f32; 3]>,
+    /// Chunk `0x09010005`: the pivot point.
+    pub pivot_point: Option<[f32; 2]>,
+    /// Chunk `0x09010006`: the texture atlas' grid size, in cells along U and along V.
+    pub atlas_grid: Option<[u16; 2]>,
+    /// The node's chunks.
+    pub chunks: Chunks,
+}
+
+impl VisualSprite {
+    /// The render mode in the sprite flags: `None` without flags or for a value that names no mode.
+    pub fn render_mode(&self) -> Option<RenderMode> {
+        match self.sprite_flags? & 7 {
+            0 => Some(RenderMode::Quad),
+            1 => Some(RenderMode::RotatedQuad),
+            _ => None,
+        }
+    }
+
+    /// Whether the sprite flags' bit 4 (sort back to front) is set; `None` without flags.
+    pub fn sort_back_to_front(&self) -> Option<bool> {
+        self.sprite_flags.map(|f| f & 0x10 != 0)
+    }
+
+    pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<VisualSprite> {
+        let mut n = VisualSprite::default();
+        n.chunks = r.chunks("CPlugVisualSprite", |r, id| {
+            if n.visual.chunk(r, id)? || n.visual_3d.chunk(r, id, &n.visual, true)? {
+                return Ok(true);
+            }
+            match id {
+                0x0901_0005 => {
+                    n.sprite_flags = Some(r.u32()?);
+                    n.global_direction = Some(r.vec3()?);
+                    n.pivot_point = Some(r.vec2()?);
+                }
+                0x0901_0006 => n.atlas_grid = Some([r.u16()?, r.u16()?]),
+                _ => return Ok(false),
+            }
+            Ok(true)
+        })?;
+        Ok(n)
+    }
+}
+
+/// One vertex of a 2D mesh (`CPlugVisual2D.Vertex2D`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Vertex2D {
+    /// The position on the screen.
+    pub position: [f32; 2],
+    /// The normal slot's two floats, as stored.
+    pub normal: [f32; 2],
+    /// The color: red, green, blue and alpha.
+    pub color: [f32; 4],
+}
+
+/// A mesh of 2D quads (`CPlugVisualQuads2D`, class `0x0904B000`, a subclass of `CPlugVisual2D`, which holds the
+/// vertices).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct VisualQuads2D {
+    /// The `CPlugVisual` base.
+    pub visual: VisualData,
+    /// `CPlugVisual2D` chunk `0x0904A000`: the vertices.
+    pub vertices: Option<Vec<Vertex2D>>,
+    /// The node's chunks.
+    pub chunks: Chunks,
+}
+
+impl VisualQuads2D {
+    pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<VisualQuads2D> {
+        let mut n = VisualQuads2D::default();
+        n.chunks = r.chunks("CPlugVisualQuads2D", |r, id| {
+            if n.visual.chunk(r, id)? {
+                return Ok(true);
+            }
+            match id {
+                0x0904_A000 => {
+                    n.vertices = Some(r.list(32, |r| {
+                        Ok(Vertex2D {
+                            position: r.vec2()?,
+                            normal: r.vec2()?,
+                            color: r.vec4()?,
+                        })
+                    })?);
                 }
                 _ => return Ok(false),
             }

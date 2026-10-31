@@ -477,10 +477,13 @@ fn refusals() {
         patched(&[0x0900_600E, 0x78, 1, 3], &[0x0900_600E, 0x78, 1, 3_000_000]),
         "do not fit",
     );
-    // a material that stores its device materials inline instead of naming a shader
+    // an inline device material with an invalid boolean
     refused(
-        patched(&[0x0907_900D, 6], &[0x0907_900D, u32::MAX]),
-        "inline device materials",
+        patched(
+            &[0x0907_900D, 6],
+            &[0x0907_900D, u32::MAX, 1, 0, 2, u32::MAX, u32::MAX, u32::MAX, 0],
+        ),
+        "bool 2",
     );
     // a collision shape other than a mesh, and a mesh or an octree of another version
     refused(patched(&[7, 3, 3], &[8, 3, 3]), "collision shape type 8");

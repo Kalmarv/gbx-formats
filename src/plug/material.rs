@@ -16,9 +16,12 @@ pub struct Material {
     pub unknown_node: Option<Option<NodeIndex>>,
     /// Chunk `0x09079007`: the custom material (`CPlugMaterialCustom`): the textures and samplers.
     pub custom_material: Option<Option<NodeIndex>>,
-    /// Chunk `0x0907900D`: the shader (`CPlugShader`), a file the material names. A material without one stores
-    /// device materials inline, which are not read.
+    /// Chunk `0x0907900D`: the shader (`CPlugShader`), a file the material names; null selects inline device materials.
     pub shader: Option<NodeIndex>,
+    /// Chunk `0x0907900D`: device-specific shaders when the main shader is null.
+    pub device_materials: Option<Vec<DeviceMaterial>>,
+    /// Chunk `0x0907900D`: integers following the inline device materials, of unknown meaning.
+    pub device_material_values: Option<Vec<i32>>,
     /// Chunk `0x0907900E`: the surface (physics) material id, a `CPlugSurface.MaterialId`
     /// (see [`super::surface::material_id_name`]).
     pub surface_id: Option<i16>,
@@ -38,10 +41,10 @@ impl Material {
                 0x0907_9001 => n.unknown_node = Some(r.node_ref()?),
                 0x0907_9007 => n.custom_material = Some(r.node_ref()?),
                 0x0907_900D => {
-                    let at = r.here();
                     n.shader = r.node_ref()?;
                     if n.shader.is_none() {
-                        return Err(r.bad_at(at, "a material with inline device materials is not read"));
+                        n.device_materials = Some(r.list(20, DeviceMaterial::read)?);
+                        n.device_material_values = Some(r.list(4, |r| r.i32())?);
                     }
                 }
                 0x0907_900E => {
@@ -179,5 +182,34 @@ impl MaterialCustom {
             Ok(true)
         })?;
         Ok(n)
+    }
+}
+
+/// An inline device material in chunk `0x0907900D`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DeviceMaterial {
+    /// First device selector, meaning unknown.
+    pub u01: i16,
+    /// Second device selector, meaning unknown.
+    pub u02: i16,
+    /// Device option, meaning unknown.
+    pub u03: bool,
+    /// Primary shader reference.
+    pub shader1: Option<NodeIndex>,
+    /// Second shader reference.
+    pub shader2: Option<NodeIndex>,
+    /// Third shader reference.
+    pub shader3: Option<NodeIndex>,
+}
+impl DeviceMaterial {
+    fn read(r: &mut Archive<'_, '_>) -> Result<Self> {
+        Ok(Self {
+            u01: r.i16()?,
+            u02: r.i16()?,
+            u03: r.bool()?,
+            shader1: r.node_ref()?,
+            shader2: r.node_ref()?,
+            shader3: r.node_ref()?,
+        })
     }
 }

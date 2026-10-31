@@ -1,5 +1,5 @@
 //! A decoration (`CGameCtnDecoration`): the setting a map is played in, made of a size, a mood, the audio and the
-//! terrain modifiers, and the solids that decorate it (`CPlugDecoratorSolid` with its `CPlugDecoratorTree`s).
+//! terrain modifiers.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
@@ -13,12 +13,6 @@ use crate::node::{Chunks, NodeIndex};
 
 /// A node reference.
 type Node = Option<NodeIndex>;
-
-/// A deprecated node list: the version the game wrote it with (always 10), the count and the references.
-fn deprecated_list(r: &mut Archive<'_, '_>) -> Result<Vec<Node>> {
-    r.version("deprecated node list", &[10])?;
-    r.list(4, |r| r.node_ref())
-}
 
 /// A node and the name it is stored under.
 pub type NamedNode = (Id, Node);
@@ -229,104 +223,6 @@ impl DecorationAudio {
                 }
                 0x0303_9001 => n.environments = Some((r.node_ref()?, r.node_ref()?)),
                 0x0303_9002 => n.sound_attenuation_in_editor = Some(r.f32()?),
-                _ => return Ok(false),
-            }
-            Ok(true)
-        })?;
-        Ok(n)
-    }
-}
-
-/// A tree of a decorator (`CPlugDecoratorTree`, class `0x090A2000`): a node of a solid's tree and the conditions it
-/// is visible, exists and casts shadows under.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct DecoratorTree {
-    /// Chunks `0x090A2007` to `0x090A2009`: the tree's properties.
-    pub tree: Option<DecoratorTreeProperties>,
-    /// The node's chunks.
-    pub chunks: Chunks,
-}
-
-/// The properties of a decorator tree.
-#[derive(Clone, Debug, PartialEq)]
-pub struct DecoratorTreeProperties {
-    /// The chunk that stored them.
-    pub chunk: u32,
-    /// The id of the solid's tree node.
-    pub tree_id: Id,
-    /// The material (`CPlugMaterial`).
-    pub material: Node,
-    /// The tree's light (`CPlugTreeLight`).
-    pub tree_light: Node,
-    /// The condition the tree exists under.
-    pub exist_cond: i32,
-    /// The condition the tree is visible under.
-    pub visible_cond: i32,
-    /// Whether the visibility condition applies to the children.
-    pub visible_apply_on_childs: bool,
-    /// The condition the tree casts shadows under.
-    pub shadow_caster_cond: i32,
-    /// Whether the shadow condition applies to the children.
-    pub shadow_caster_apply_on_childs: bool,
-    /// Whether the visual becomes the surface.
-    pub transform_visual_to_surface: bool,
-    /// Chunks `0x090A2008` and later: whether the tree has no location.
-    pub no_location: Option<bool>,
-    /// Chunk `0x090A2009`: the condition under which the tree collides.
-    pub collidable_cond: Option<i32>,
-}
-
-impl DecoratorTree {
-    pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<DecoratorTree> {
-        let mut n = DecoratorTree::default();
-        n.chunks = r.chunks("CPlugDecoratorTree", |r, id| {
-            match id {
-                0x090A_2007..=0x090A_2009 => {
-                    let mut tree = DecoratorTreeProperties {
-                        chunk: id,
-                        tree_id: r.id()?,
-                        material: r.node_ref()?,
-                        tree_light: r.node_ref()?,
-                        exist_cond: r.i32()?,
-                        visible_cond: r.i32()?,
-                        visible_apply_on_childs: r.bool()?,
-                        shadow_caster_cond: r.i32()?,
-                        shadow_caster_apply_on_childs: r.bool()?,
-                        transform_visual_to_surface: r.bool()?,
-                        no_location: None,
-                        collidable_cond: None,
-                    };
-                    if id >= 0x090A_2008 {
-                        tree.no_location = Some(r.bool()?);
-                    }
-                    if id >= 0x090A_2009 {
-                        tree.collidable_cond = Some(r.i32()?);
-                    }
-                    n.tree = Some(tree);
-                }
-                _ => return Ok(false),
-            }
-            Ok(true)
-        })?;
-        Ok(n)
-    }
-}
-
-/// A decorator solid (`CPlugDecoratorSolid`, class `0x090A3000`): the trees decorating a solid.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct DecoratorSolid {
-    /// Chunk `0x090A3000`: the trees (`CPlugDecoratorTree`).
-    pub trees: Option<Vec<Node>>,
-    /// The node's chunks.
-    pub chunks: Chunks,
-}
-
-impl DecoratorSolid {
-    pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<DecoratorSolid> {
-        let mut n = DecoratorSolid::default();
-        n.chunks = r.chunks("CPlugDecoratorSolid", |r, id| {
-            match id {
-                0x090A_3000 => n.trees = Some(deprecated_list(r)?),
                 _ => return Ok(false),
             }
             Ok(true)
