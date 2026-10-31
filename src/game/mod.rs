@@ -6,6 +6,7 @@
 )]
 
 pub mod block;
+pub mod blockinfo;
 pub mod challenge;
 pub mod collector;
 pub mod ghost;

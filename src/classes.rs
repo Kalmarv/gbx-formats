@@ -155,4 +155,20 @@ classes! {
     Surface(plug::surface::Surface) = 0x0900_C000, "CPlugSurface", parent 0x0902_B000;
     /// A collision geometry.
     SurfaceGeom(plug::surface::SurfaceGeom) = 0x0900_F000, "CPlugSurfaceGeom", parent 0x0902_B000;
+    /// A block.
+    BlockInfoClassic(game::blockinfo::BlockInfoClassic) = 0x0305_1000, "CGameCtnBlockInfoClassic", parent 0x2400_5000;
+    /// A block info for flat terrain.
+    BlockInfoFlat(game::blockinfo::BlockInfoFlat) = 0x0304_F000, "CGameCtnBlockInfoFlat", parent 0x2400_5000;
+    /// A block info for a rectangular asymmetric block.
+    BlockInfoRectAsym(game::blockinfo::BlockInfoRectAsym) = 0x0305_6000, "CGameCtnBlockInfoRectAsym", parent 0x2400_5000;
+    /// A road block info.
+    BlockInfoRoad(game::blockinfo::BlockInfoRoad) = 0x0305_2000, "CGameCtnBlockInfoRoad", parent 0x2400_5000;
+    /// A clip block info.
+    BlockInfoClip(game::blockinfo::BlockInfoClip) = 0x0305_3000, "CGameCtnBlockInfoClip", parent 0x2400_5000;
+    /// A frontier block info.
+    BlockInfoFrontier(game::blockinfo::BlockInfoFrontier) = 0x0305_0000, "CGameCtnBlockInfoFrontier", parent 0x2400_5000;
+    /// A pylon block info.
+    BlockInfoPylon(game::blockinfo::BlockInfoPylon) = 0x0305_5000, "CGameCtnBlockInfoPylon", parent 0x2400_5000;
+    /// A block unit.
+    BlockUnitInfo(game::blockinfo::BlockUnitInfo) = 0x0303_6000, "CGameCtnBlockUnitInfo", parent 0x0100_1000;
 }
