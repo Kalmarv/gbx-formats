@@ -13,6 +13,7 @@
 
 pub mod bitmap;
 pub mod func_shader;
+pub mod func_tree;
 pub mod light;
 pub mod material;
 pub mod shader;

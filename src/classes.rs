@@ -157,6 +157,16 @@ classes! {
     Surface(plug::surface::Surface) = 0x0900_C000, "CPlugSurface", parent 0x0902_B000;
     /// A collision geometry.
     SurfaceGeom(plug::surface::SurfaceGeom) = 0x0900_F000, "CPlugSurfaceGeom", parent 0x0902_B000;
+    /// A scene tree holding a light.
+    TreeLight(plug::tree::TreeLight) = 0x0906_2000, "CPlugTreeLight", parent 0x0904_F000;
+    /// A sprite mesh.
+    VisualSprite(plug::visual::VisualSprite) = 0x0901_0000, "CPlugVisualSprite", parent 0x0902_C000;
+    /// A mesh of 2D quads.
+    VisualQuads2D(plug::visual::VisualQuads2D) = 0x0904_B000, "CPlugVisualQuads2D", parent 0x0904_A000;
+    /// A function of a sub-visual sequence.
+    FuncTreeSubVisualSequence(plug::func_tree::TreeSubVisualSequence) = 0x0503_1000, "CFuncTreeSubVisualSequence", parent 0x0501_C000;
+    /// Keys of natural numbers.
+    FuncKeysNatural(plug::func_tree::KeysNatural) = 0x0503_0000, "CFuncKeysNatural", parent 0x0500_2000;
     /// A solid.
     Solid(plug::solid::Solid) = 0x0900_5000, "CPlugSolid", parent 0x0902_B000;
     /// CPlugBitmap.

@@ -145,9 +145,24 @@ pub struct CollisionMesh {
 }
 
 /// A collision shape (`CPlugSurface.ISurf`), by the type id stored before it. Of the shapes the engine has, only
-/// meshes occur in the files read.
+/// these occur in the files read; a surface geometry stores them in the version without a surface index.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Surf {
+    /// Type 0: a sphere, named by one float (`Size` in GBX.NET).
+    Sphere {
+        /// The float stored.
+        size: f32,
+    },
+    /// Type 1: an ellipsoid, named by three floats (`Size` in GBX.NET).
+    Ellipsoid {
+        /// The floats stored.
+        size: [f32; 3],
+    },
+    /// Type 6: a box, stored like the bounding box (`Transform` in GBX.NET).
+    Box {
+        /// The box.
+        bounds: BoxAligned,
+    },
     /// Type 7: a triangle mesh.
     Mesh(CollisionMesh),
 }
@@ -243,11 +258,16 @@ fn surf(r: &mut Archive<'_, '_>) -> Result<Option<Surf>> {
     let at = r.here();
     Ok(Some(match r.i32()? {
         -1 => return Ok(None),
+        0 => Surf::Sphere { size: r.f32()? },
+        1 => Surf::Ellipsoid { size: r.vec3()? },
+        6 => Surf::Box {
+            bounds: box_aligned(r)?,
+        },
         7 => Surf::Mesh(mesh(r)?),
         other => {
             return Err(r.bad_at(
                 at,
-                format!("collision shape type {other}: only meshes (7) are read"),
+                format!("collision shape type {other}: only spheres (0), ellipsoids (1), boxes (6) and meshes (7) are read"),
             ));
         }
     }))

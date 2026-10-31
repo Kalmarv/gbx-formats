@@ -148,3 +148,28 @@ impl TreeVisualMip {
         Ok(n)
     }
 }
+
+/// A tree that holds a light (`CPlugTreeLight`, class `0x09062000`, a subclass of `CPlugTree`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TreeLight {
+    /// The `CPlugTree` base's fields.
+    pub tree: TreeData,
+    /// Chunk `0x09062004`: the light (`CPlugLight`).
+    pub light: Option<Option<NodeIndex>>,
+    /// The node's chunks.
+    pub chunks: Chunks,
+}
+
+impl TreeLight {
+    pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<TreeLight> {
+        let mut n = TreeLight::default();
+        n.chunks = r.chunks("CPlugTreeLight", |r, id| {
+            match id {
+                0x0906_2004 => n.light = Some(r.node_ref()?),
+                _ => return n.tree.chunk(r, id),
+            }
+            Ok(true)
+        })?;
+        Ok(n)
+    }
+}

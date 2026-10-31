@@ -22,7 +22,7 @@ pub struct FunctionTiming {
     pub input_value_id: Id,
 }
 impl FunctionTiming {
-    fn read(r: &mut Archive<'_, '_>) -> Result<Self> {
+    pub(crate) fn read(r: &mut Archive<'_, '_>) -> Result<Self> {
         Ok(Self {
             period: r.f32()?,
             phase: r.f32()?,
