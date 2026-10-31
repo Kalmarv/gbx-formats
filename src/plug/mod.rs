@@ -5,6 +5,9 @@
 //! Each class here is a node of its own class id, except that a class's base classes are read as part of it: a
 //! node of class `CPlugVisualIndexedTriangles` stores the chunks of `CPlugVisual`, `CPlugVisual3D` and
 //! `CPlugVisualIndexed` ahead of its own, and the node carries one struct per base ([`visual`]).
+//! Texture files and sampler/UV state are in [`bitmap`], shader requirements and GPU passes in [`shader`],
+//! shader animation in [`func_shader`], and Plug/Gx/scene/Hms lighting in [`light`]. These retain serialized flags,
+//! selectors and references; no native legacy upgrades or rendering policy are applied.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
