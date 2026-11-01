@@ -34,7 +34,7 @@ repository = "https://github.com/Kalmarv/gbx-formats"
 publish = true
 
 [workspace.dependencies]
-primase-foundations = { version = "0.3.0", git = "https://github.com/Kalmarv/primase-foundations", rev = "d64ea516ec76c43ddb76ea4556eada37502fc3d4" }
+primase-foundations = "0.3.1"
 primase-testdata = { version = "0.1.6", git = "https://github.com/Kalmarv/primase-testdata", rev = "eb199df6f315faf37732ea648413ae044be2128f" }
 thiserror = { version = "=2.0.21", default-features = false, features = ["std"] }
 serde_json = { version = "=1.0.154", default-features = false, features = ["std", "preserve_order", "float_roundtrip"] }
