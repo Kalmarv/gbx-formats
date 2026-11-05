@@ -1,34 +1,42 @@
 # gbx-formats
 
-A Rust library that reads Nadeo's GameBox (`.Gbx`) files: the container, its LZO1X-compressed body, and the nodes of
-the classes TrackMania Nations Forever maps (`.Challenge.Gbx`) hold.
+A Rust library that reads Nadeo's GameBox (`.Gbx`) files and the pack files (`.pak`) of TrackMania Nations Forever. It
+is the GameBox reader behind [primase](https://github.com/Kalmarv/primase)'s TrackMania route.
 
-It reads, from bytes you give it:
+## Features
 
-- **The container**, version 6, binary: header, header chunks (kept as stored, for the main class's header reader),
-  reference table and body, which it decompresses (LZO1X, through
-  [primase-foundations](https://github.com/Kalmarv/primase-foundations)).
-- **The body's nodes**, class by class: the main node and every node a reference reads, by the index the file gives
-  each, with the id and node-reference tables the format uses. A chunk this crate does not read is kept as stored
-  when the file marks it skippable and refused otherwise.
-- **Maps** (`CGameCtnChallenge`): the header chunks (description and medal times, map info and name, version, XML,
-  thumbnail and comments) and the body: blocks with their skins and waypoints, block stock and parameters (medal
-  times, tips, stunts), vehicle, checkpoints, laps, mediatracker clip references, music, thumbnail camera, password.
-- **MediaTracker**: clips and trigger groups, tracks, text, image, sound, custom/game/path cameras, camera shake,
-  fades, 2D/3D triangle animation, color/bloom/depth/motion effects, similarity effects and real key functions.
-  `game::media` keeps their fields and node references; `Clips` and `Challenge` resolve clip references through
-  typed accessors. Derived triangle and real-function nodes read the base classes' chunk ids.
-- **TMUnlimiter** (`game::unlimiter`, `game::parameters`): the data TMUnlimiter 2.x writes into a map's chunks
-  `0x3F001001` to `0x3F001003` (versions 1, 6 and 7: the real blocks, trigger, external and embedded blocks, motion,
-  parameter sets, trigger groups, block groups, embedded images and block models) and the encrypted
-  `0x3F001000`. The embedded block models are `plug` nodes (trees, meshes, materials, collision surfaces); the files
-  they name are nodes the body never reads. A module of AngelScript bytecode is refused, as GBX.NET refuses it.
+- Reads the Gbx container (version 6, binary): header, header chunks, reference table and the LZO1X-compressed body
+- Reads the body's nodes class by class (91 classes), following node references and lookback ids
+- Reads maps (`CGameCtnChallenge`): header chunks (description, medal times, name, XML, thumbnail) and body (blocks, skins, waypoints, checkpoints, laps, parameters, music, password)
+- Reads MediaTracker clips, tracks and blocks (cameras, text, images, sounds, fades, triangles, colour and blur effects)
+- Reads ghosts, including their sample stream and validation inputs
+- Reads TMUnlimiter's map chunks `0x3F001001` to `0x3F001003` (versions 1, 6 and 7, with embedded block models) and the encrypted `0x3F001000`
+- Reads TMNF's pack files (NadeoPak version 3) with the keys from `packlist.dat`, decrypting each Gbx file as its nodes are read
+- Reads Stadium's block infos, block units, scene objects, decorations, moods and collections
+- Reads Plug classes: solids, trees, meshes, sprites, materials, bitmaps, shaders, lights and collision surfaces
+- Resolves reference-table entries to file paths and finds pack files by real or hashed name
+- Keeps skippable chunks it does not read as stored, and refuses unknown classes, unskippable chunks and unknown versions by name
+- Every read is bounds-checked: bad bytes give an `Error` naming the byte offset, never a panic, and `unsafe` is denied
+- Parses bytes you give it and does no file, environment or process access
 
-It was written against the 100 most downloaded TrackMania Nations Forever maps uploaded to TrackMania Exchange in
-2026, checked field by field against [GBX.NET](https://github.com/BigBang1112/gbx-net) 2.5.0. Used by
-[primase](https://github.com/Kalmarv/primase), a game-asset conversion library.
+## Getting Started
 
-## Example
+### Requirements
+
+Rust 1.99 or later (edition 2024). The repository pins its toolchain in `rust-toolchain.toml`.
+
+### Installation
+
+The crate is not published on crates.io. Add it as a git dependency:
+
+```toml
+[dependencies]
+gbx-formats = { git = "https://github.com/Kalmarv/gbx-formats" }
+```
+
+### Usage
+
+Read a map and its main node. This is the crate's doc test, with a map built by hand:
 
 ```rust
 use gbx_formats::Gbx;
@@ -49,51 +57,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-This is the crate's doc test (`src/lib.rs`), so it is compiled and run by `cargo test`. A map's header chunks are read
-with `game::challenge::Header::read(&gbx)`.
+A map's header chunks are read with `game::challenge::Header::read(&gbx)`.
 
-## What it guarantees
+List and read the files of an installed pack:
 
-- Every read is bounds-checked. Malformed or hostile bytes give an `Err` that names the byte offset (in the file, or
-  in the decompressed body) and what was expected, never a panic or an out-of-range index (`unsafe` is denied;
-  arithmetic, indexing and truncating casts are linted against in the parsers). Counts cannot promise more items than
-  there are bytes left, nothing is allocated for the header's node count, and a body's stated size is refused past
-  255 times its compressed length (LZO1X's largest expansion).
-- What it does not read it refuses by name instead of guessing: a Gbx version other than 6, the text format, a
-  compressed reference table, a node of a class it does not read (`Error::UnknownClass`), a chunk it does not read
-  that the file does not mark skippable (`Error::UnknownChunk`), a chunk version it does not know, block flags naming
-  data it does not read.
-- Node references are checked: an index at or past the header's node count is refused, and a reference to a node read
-  earlier (or being read) is kept as that index.
-- Values are kept as stored: ids as numbers or strings, block coordinates and directions as the file holds them.
+```rust
+use gbx_formats::pak::{PackList, Pak};
+use std::path::Path;
 
-## What it does not do
-
-- It does not write Gbx files, or read the text format or Gbx versions other than 6.
-- It reads the TMF MediaTracker chunk layouts present in the map corpus. Ghost blocks and ghosts are refused
-  as unknown classes; custom objects and newer MediaTracker layouts are not read.
-- TMUnlimiter's chunks (`0x3F001000`, `0x3F001003`), which hold the real blocks of maps made with it, are kept as
-  stored; those maps' block data is the stand-in TMUnlimiter writes for the game.
-- It does not read pack files (`.pak`) or the block models a map names.
-
-## Running the tests
-
-```sh
-cargo test --workspace
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let packs = Path::new("path/to/TmNationsForever/Packs");
+    let list = PackList::parse(&std::fs::read(packs.join("packlist.dat"))?)?;
+    let key = list.key("Stadium").ok_or("no key for Stadium")?;
+    let pak = Pak::parse(std::fs::read(packs.join("Stadium.pak"))?, &key.key)?;
+    for file in &pak.files {
+        // a Gbx file holding a class this crate does not read is refused
+        match pak.read(file) {
+            Ok(bytes) => println!("{}: {} bytes", pak.path(file), bytes.len()),
+            Err(e) => println!("{}: {e}", pak.path(file)),
+        }
+    }
+    Ok(())
+}
 ```
 
-runs the tests that build their own small Gbx files in memory (a hand-built map read field by field, a
-truncated-at-every-length test, refusals with their offsets, flipped and random bytes), plus the doc test above. No
-game file is kept in this repository. The test that reads real maps, `tests/maps.rs`, skips with a line naming what it
-needs when `GAME_DATA` is not set. To run it, point the `GAME_DATA` environment variable at a TOML file naming your own
-copies, in the layout of [primase-testdata](https://github.com/Kalmarv/primase-testdata): a folder of maps, and
-GBX.NET's reading of them, written by a small dumper over GBX.NET 2.5.0.
-[tests/inputs/README.md](tests/inputs/README.md) lists every input the tests can read (generated from
-`tests/inputs/mod.rs`).
+Run the tests with `cargo test --workspace`. It runs the tests that build their own Gbx bytes in memory; no game file is kept in the repository. The tests that compare
+the crate with GBX.NET 2.5.0 over real maps and the TMNF packs skip unless `GAME_DATA` names a TOML file in the layout of
+[primase-testdata](https://github.com/Kalmarv/primase-testdata) pointing at your own copies;
+[tests/inputs/README.md](tests/inputs/README.md) lists what they read.
 
-## Documentation, contributing, license
-
-API documentation: `cargo doc --open`. See [CONTRIBUTING.md](CONTRIBUTING.md) to build or to report a file the crate
-cannot read.
-
-Licensed under the GNU General Public License, version 3 or later (see [LICENSE](LICENSE)).
+API documentation: `cargo doc --open`. See [CONTRIBUTING.md](CONTRIBUTING.md) to add a class or report a file the crate
+cannot read. Licensed under the GNU General Public License, version 3 or later ([LICENSE](LICENSE)).
