@@ -1,5 +1,7 @@
 # gbx-formats
 
+[![crates.io: gbx-formats](https://img.shields.io/crates/v/gbx-formats?label=gbx-formats)](https://crates.io/crates/gbx-formats) [![docs.rs](https://img.shields.io/docsrs/gbx-formats)](https://docs.rs/gbx-formats) [![CI](https://img.shields.io/github/actions/workflow/status/Kalmarv/gbx-formats/ci.yml?branch=main&label=CI)](https://github.com/Kalmarv/gbx-formats/actions/workflows/ci.yml)
+
 A Rust library that reads Nadeo's GameBox (`.Gbx`) files and the pack files (`.pak`) of TrackMania Nations Forever. It
 is the GameBox reader behind [primase](https://github.com/Kalmarv/primase)'s TrackMania route.
 
@@ -27,11 +29,8 @@ Rust 1.99 or later (edition 2024). The repository pins its toolchain in `rust-to
 
 ### Installation
 
-The crate is not published on crates.io. Add it as a git dependency:
-
-```toml
-[dependencies]
-gbx-formats = { git = "https://github.com/Kalmarv/gbx-formats" }
+```sh
+cargo add gbx-formats
 ```
 
 ### Usage
