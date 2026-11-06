@@ -13,6 +13,7 @@
     clippy::cast_possible_truncation
 )]
 
+use super::angelscript::SavedModule;
 use super::media::FuncKeysReal;
 use super::parameters::{self, ValueKind};
 use crate::archive::{Archive, Id, Ident};
@@ -87,12 +88,13 @@ pub struct ClipMapping {
     pub resource: ClipResource,
 }
 
-/// An AngelScript module (version 7). Only empty ones occur: GBX.NET refuses modules with bytecode, and so does
-/// this crate.
+/// An AngelScript module (version 7): its name and, unless the module is empty (flag bit 0), its saved bytecode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AngelScriptModule {
     /// The module's name; absent for a core module (flag bit 1).
     pub module_name: Option<String>,
+    /// The module's code as AngelScript saves it, which has no length of its own: walked to its end.
+    pub byte_code: Option<SavedModule>,
 }
 
 /// How a parameter acts on its function (`ParameterOperation`).
@@ -1100,10 +1102,15 @@ impl Unlimiter {
                 ));
             }
             let module_name = if flags & 2 == 0 { Some(r.string()?) } else { None };
-            if flags & 1 == 0 {
-                return Err(r.bad("an AngelScript module with bytecode is not read"));
-            }
-            Ok(AngelScriptModule { module_name })
+            let byte_code = if flags & 1 == 0 {
+                Some(SavedModule::read(r)?)
+            } else {
+                None
+            };
+            Ok(AngelScriptModule {
+                module_name,
+                byte_code,
+            })
         })?;
         self.parameter_sets = r.list(8, |r| {
             Ok(ParameterSet {

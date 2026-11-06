@@ -5,6 +5,7 @@
     clippy::cast_possible_truncation
 )]
 
+pub mod angelscript;
 pub mod block;
 pub mod blockinfo;
 pub mod challenge;

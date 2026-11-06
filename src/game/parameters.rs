@@ -1,6 +1,9 @@
 //! The TMUnlimiter parameter functions (`ParameterName` in GBX.NET) and the kind of value each carries. Generated
 //! from the enum and the switch of GBX.NET 2.5.0's `CGameCtnChallenge.TMUnlimiter.cs`: a function is its index in
-//! [`NAMES`].
+//! [`NAMES`]. Two kinds differ from GBX.NET's: `Vehicle_M4AccelFromSlipAngle` (124) and
+//! `Vehicle_M4SteerRadiusCoefFromSlipAngle` (136) carry a float, as TMUnlimiter's script interface declares the
+//! fields they set (`float m4AccelFromSlipAngle`, `float m4SteerRadiusCoefFromSlipAngle` of `VehicleCarTuning`) and
+//! as maps store them (Exchange map 13326247 sets 124 to 10.0); GBX.NET reads them as curves.
 #![deny(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
@@ -46,10 +49,9 @@ pub fn kind(function: u32) -> Option<ValueKind> {
         | 85..=110
         | 112..=116
         | 118
-        | 120..=123
-        | 125..=129
+        | 120..=129
         | 131
-        | 133..=135
+        | 133..=136
         | 138..=140
         | 145
         | 147
@@ -87,10 +89,9 @@ pub fn kind(function: u32) -> Option<ValueKind> {
         | 74
         | 84
         | 119
-        | 124
         | 130
         | 132
-        | 136..=137
+        | 137
         | 146
         | 148..=149
         | 164

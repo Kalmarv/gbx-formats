@@ -9,6 +9,7 @@
     reason = "a test building and reading hand-made bytes"
 )]
 
+use gbx_formats::game::angelscript::{Declared, Import};
 use gbx_formats::game::challenge::Challenge;
 use gbx_formats::game::parameters::{NAMES, ValueKind, kind};
 use gbx_formats::game::unlimiter::{
@@ -91,6 +92,18 @@ fn v1() -> Vec<u8> {
     d.extend_from_slice(&[4, 0, 9, 2]);
     u32s(&mut d, &[0x10]);
     skippable(0x3F00_1001, &d)
+}
+
+/// The two slip-angle functions carry a float, as TMUnlimiter's script interface declares the fields they set (GBX.NET
+/// reads them as curves).
+#[test]
+fn the_slip_angle_functions_carry_a_float() {
+    for name in [
+        "Vehicle_M4AccelFromSlipAngle",
+        "Vehicle_M4SteerRadiusCoefFromSlipAngle",
+    ] {
+        assert_eq!(kind(function(name)), Some(ValueKind::Float), "{name}");
+    }
 }
 
 #[test]
@@ -258,11 +271,164 @@ fn version_6_refusals() {
 
 // ---- version 7 ----
 
+// ---- AngelScript saved bytecode ----
+
+/// AngelScript's encoded unsigned number (`WriteEncodedInt64`), in the forms up to three bytes.
+fn enc(out: &mut Vec<u8>, v: u32) {
+    match v {
+        0..0x40 => out.push(v as u8),
+        0x40..0x2000 => out.extend_from_slice(&[0x40 | (v >> 8) as u8, v as u8]),
+        _ => out.extend_from_slice(&[0x60 | (v >> 16) as u8, (v >> 8) as u8, v as u8]),
+    }
+}
+
+/// A saved module written as `asCWriter` writes one, with the string table it builds: a string seen before is its
+/// index, doubled and odd.
+struct Module {
+    b: Vec<u8>,
+    strings: Vec<Vec<u8>>,
+}
+
+impl Module {
+    fn enc(&mut self, v: u32) -> &mut Self {
+        enc(&mut self.b, v);
+        self
+    }
+    fn byte(&mut self, v: u8) -> &mut Self {
+        self.b.push(v);
+        self
+    }
+    fn raw(&mut self, v: &[u8]) -> &mut Self {
+        self.b.extend_from_slice(v);
+        self
+    }
+    fn s(&mut self, text: &[u8]) -> &mut Self {
+        if text.is_empty() {
+            return self.enc(0);
+        }
+        if let Some(i) = self.strings.iter().position(|t| t == text) {
+            return self.enc(i as u32 * 2 + 1);
+        }
+        self.strings.push(text.to_vec());
+        self.enc(text.len() as u32 * 2).raw(text)
+    }
+    /// A new primitive data type (token, no flags).
+    fn primitive(&mut self, token: u32) -> &mut Self {
+        self.enc(0).enc(token).byte(0)
+    }
+    /// The object type `name` of the global namespace.
+    fn object(&mut self, name: &[u8]) -> &mut Self {
+        self.byte(b'o').s(name).s(b"")
+    }
+}
+
+const VOID: u32 = 80;
+const INT: u32 = 68;
+
+/// A module with debug information that declares an enum and a class with a property and a constructor, a global
+/// variable, a global virtual-property function with a parameter, object variable and try/catch records and an
+/// instruction of each operand width, an import, used functions, a used global, a string constant and a used object
+/// property.
+fn saved_module() -> Vec<u8> {
+    let mut m = Module {
+        b: Vec::new(),
+        strings: Vec::new(),
+    };
+    m.enc(0); // debug information kept
+    // an enum: name, flags (asOBJ_ENUM), size, namespace, one value
+    m.enc(1).s(b"Mode").raw(&(1u64 << 26).to_le_bytes()).enc(4).s(b"");
+    m.enc(1).s(b"A").raw(&7i32.to_le_bytes());
+    // a class: asOBJ_REF | asOBJ_SCRIPT_OBJECT, size 4 (a size of 0 would make it an interface)
+    m.enc(1)
+        .s(b"Thing")
+        .raw(&(1u64 | 1 << 21).to_le_bytes())
+        .enc(4)
+        .s(b"");
+    m.enc(0); // funcdefs
+    // the class: no base, no interfaces, no destructor, one constructor and its factory
+    m.byte(0).enc(0).byte(0).enc(1);
+    m.byte(b'f')
+        .s(b"Thing")
+        .primitive(VOID)
+        .enc(0)
+        .enc(1)
+        .object(b"Thing")
+        .byte(0); // signature and traits
+    m.byte(0); // bits
+    // RET 0; PshC8 2^40 (the 64-bit form); PshC4 0x12345 (the three-byte form)
+    m.enc(3)
+        .byte(10)
+        .enc(0)
+        .byte(47)
+        .raw(&[0x7E, 0x00, 0x01, 0, 0, 0, 0])
+        .byte(2)
+        .enc(0x1_2345);
+    m.enc(0); // variable space
+    m.enc(1).enc(5).enc(2).enc(1).s(b"thing.as"); // line numbers, sections
+    m.enc(0); // variables
+    m.s(b"thing.as").enc(1).enc(0); // section, declared at, parameter names
+    m.byte(b'r').enc(0); // the factory: the function read first
+    m.enc(0).enc(0); // methods, virtual functions
+    m.enc(1).s(b"x").primitive(INT).enc(0); // the class's property
+    m.enc(0); // typedefs
+    // a global variable: name, namespace, type (the int read before), no initialisation
+    m.enc(1).s(b"g").s(b"").enc(2).byte(0);
+    // script functions: the constructor again, and int get_value(int n)
+    m.enc(2).byte(b'r').enc(0);
+    m.byte(b'f')
+        .s(b"get_value")
+        .enc(2)
+        .enc(1)
+        .enc(2)
+        .enc(1)
+        .enc(0)
+        .enc(1)
+        .enc(0)
+        .byte(0)
+        .byte(0)
+        .s(b"");
+    m.byte(8 | 16); // object variable records, try/catch blocks
+    m.enc(1).byte(77).enc(1).enc(0x1_2345); // SetV4 v1, 0x12345
+    m.enc(1);
+    m.enc(1).enc(0).enc(0).enc(1); // object variable record: position, offset, asOBJ_INIT
+    m.enc(1).enc(0).enc(1); // a try block
+    m.enc(0).enc(0); // line numbers, sections
+    m.enc(1).enc(0).s(b"v").enc(2).enc(2); // a variable: declared at, name, stack offset, type
+    m.s(b"thing.as").enc(3).enc(1).s(b"n");
+    m.enc(1).byte(b'r').enc(1); // global functions
+    // an import: void ext() from module Other
+    m.enc(1)
+        .byte(b'f')
+        .s(b"ext")
+        .enc(1)
+        .enc(0)
+        .enc(5)
+        .byte(0)
+        .s(b"")
+        .s(b"Other");
+    m.enc(1).object(b"Thing"); // used types
+    m.enc(1).enc(1); // used type ids
+    m.enc(2)
+        .byte(b'n')
+        .byte(b'a')
+        .s(b"print")
+        .enc(1)
+        .enc(0)
+        .enc(0)
+        .byte(0)
+        .s(b""); // used functions
+    m.enc(1).s(b"g").s(b"").enc(2).byte(1); // used global variables
+    m.enc(1).s(b"h\0i\0"); // string constants
+    m.enc(1).object(b"Thing").s(b"x"); // used object properties
+    m.b
+}
+
 /// The ways a version 7 chunk is made wrong.
 #[derive(Clone)]
 struct Wrong {
     flags: u16,
     module_flags: u8,
+    code: Vec<u8>,
     function: u32,
     operation: u8,
     trigger_group: u32,
@@ -280,7 +446,8 @@ impl Wrong {
     fn good() -> Wrong {
         Wrong {
             flags: 2 | 4 | 16 | 64 | 512,
-            module_flags: 1,
+            module_flags: 0,
+            code: saved_module(),
             function: function("Vehicle_Scale"),
             operation: 1,
             trigger_group: 0,
@@ -301,11 +468,14 @@ fn v7(id: u32, w: &Wrong) -> Vec<u8> {
     let mut d = vec![7u8];
     d.extend_from_slice(&w.flags.to_le_bytes());
     f32s(&mut d, &[5.0, 6.0, 7.0]);
-    // two AngelScript modules, both empty: a named one and a core one
+    // two AngelScript modules: a named one with its code and an empty core one
     u32s(&mut d, &[2]);
     d.push(w.module_flags);
     if w.module_flags & 2 == 0 {
         string(&mut d, "Main");
+    }
+    if w.module_flags & 1 == 0 {
+        d.extend_from_slice(&w.code);
     }
     d.push(3);
     // one parameter set, one parameter of each kind of value
@@ -452,6 +622,34 @@ fn version_7_reads() {
         .map(|m| m.module_name.clone())
         .collect();
     assert_eq!(names, [Some("Main".to_owned()), None]);
+    assert!(u.angel_script_modules[1].byte_code.is_none());
+    let code = u.angel_script_modules[0].byte_code.as_ref().unwrap();
+    assert_eq!(code.bytes, saved_module(), "the stream as stored");
+    assert!(code.debug_info);
+    let names = |d: &[Declared]| d.iter().map(|d| d.name.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        (names(&code.enums), names(&code.classes), names(&code.globals)),
+        (
+            vec!["Mode".to_owned()],
+            vec!["Thing".to_owned()],
+            vec!["g".to_owned()]
+        )
+    );
+    assert!(code.funcdefs.is_empty() && code.typedefs.is_empty());
+    let functions: Vec<_> = code
+        .functions
+        .iter()
+        .map(|f| (f.name.as_str(), f.class.as_deref()))
+        .collect();
+    assert_eq!(functions, [("Thing", Some("Thing")), ("get_value", None)]);
+    assert_eq!(
+        code.imports,
+        [Import {
+            name: "ext".into(),
+            module: "Other".into()
+        }]
+    );
+    assert_eq!(code.string_constants, [b"h\0i\0".to_vec()]);
 
     let p = &u.parameter_sets[0].parameters;
     assert_eq!(u.parameter_sets[0].name, "Boost");
@@ -640,7 +838,32 @@ fn version_7_refusals() {
         };
     }
     wrong!(flags: 1 << 10; "bits above 9");
-    wrong!(module_flags: 0; "bytecode");
+    // a module's code wrong: an instruction the writer never stores (LINE), a string, data type or function reference
+    // past those read, an unknown type-info tag, an encoded word too wide, a count past the stream
+    let code = saved_module();
+    let at = |needle: &[u8]| code.windows(needle.len()).position(|w| w == needle).unwrap();
+    let mut c = code.clone();
+    c[at(&[77, 1])] = 205;
+    wrong!(code: c; "instruction 205: not one the writer stores");
+    let mut c = code.clone();
+    let global = at(&[1, 2, b'g', 0, 2, 0]);
+    c[global + 1] = 49; // the global's name: string 24 of the 5 read
+    wrong!(code: c; "string 24: 5 were read");
+    let mut c = code.clone();
+    c[global + 4] = 9;
+    wrong!(code: c; "data type 9: 2 were read");
+    let mut c = code.clone();
+    c[at(&[b'r', 0, 0, 0]) + 1] = 5; // the factory
+    wrong!(code: c; "function 5: 1 were read");
+    let mut c = code.clone();
+    c[at(&[b'o', 5, 0])] = b'z';
+    wrong!(code: c; "type info tag 0x7a");
+    let mut c = code.clone();
+    c[at(&[77, 1]) + 2..at(&[77, 1]) + 5].copy_from_slice(&[0x7F, 0x7F, 0x7F]);
+    wrong!(code: c; "does not fit");
+    let mut c = code.clone();
+    c[at(b"\x08Mode") + 8] = 0; // the enum's flags without asOBJ_ENUM
+    wrong!(code: c; "lack asOBJ_ENUM");
     wrong!(function: NAMES.len() as u32; "not in the enum");
     wrong!(operation: 3; "parameter operation 3");
     wrong!(trigger_group: 1; "trigger group 1: there are 1");

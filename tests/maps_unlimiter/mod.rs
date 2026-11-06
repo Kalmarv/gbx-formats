@@ -324,7 +324,12 @@ fn compare_chunk(u: &Unlimiter, nodes: &Nodes, want: &Value, check: &mut Check<'
     let modules: Vec<Value> = u
         .angel_script_modules
         .iter()
-        .map(|m| json!([1 | if m.module_name.is_none() { 2 } else { 0 }, m.module_name]))
+        .map(|m| {
+            json!([
+                u8::from(m.byte_code.is_none()) | if m.module_name.is_none() { 2 } else { 0 },
+                m.module_name
+            ])
+        })
         .collect();
     check("angel script modules", json!(modules), &t["angel_script_modules"]);
     let sets: Vec<Value> = u

@@ -14,6 +14,7 @@ mod maps_unlimiter;
 use gbx_formats::game::block::Block;
 use gbx_formats::game::challenge::{Challenge, Header};
 use gbx_formats::game::collector::ChallengeParameters;
+use gbx_formats::game::unlimiter::{Operation, ParameterValue};
 use gbx_formats::{Gbx, Id, Ident, NodeIndex, Nodes};
 use inputs::{Game, OracleSet, oracle};
 use serde_json::{Value, json};
@@ -342,4 +343,75 @@ fn every_map_reads_as_gbx_net_reads_it() {
         }
     }
     assert!(all, "see the lines above");
+}
+
+/// The ten maps of tmx-2026-top GBX.NET refuses read: nine whose TMUnlimiter module holds AngelScript code (the code
+/// walked to its end is the very bytes of the decompressed body, GBX.NET's, and one map's declarations are the ones
+/// its script states in plain text), and one that sets `Vehicle_M4AccelFromSlipAngle`, a float GBX.NET takes for a
+/// curve.
+#[test]
+fn the_maps_of_tmx_2026_top_gbx_net_refuses_read() {
+    let (Some(maps), Some(dump)) = (
+        oracle(OracleSet::Corpus, Game::Tmnf, "tmx-2026-top"),
+        oracle(OracleSet::Gbxnet, Game::Tmnf, "tmx-2026-top"),
+    ) else {
+        return;
+    };
+    let with_code = [
+        "13103705", "13137582", "13157883", "13158454", "13162926", "13298272", "13329790", "13462492",
+        "13471994",
+    ];
+    for name in with_code {
+        let file = format!("{name}.Gbx");
+        let bytes = std::fs::read(maps.join(&file)).unwrap();
+        let gbx = Gbx::parse(&bytes).unwrap();
+        let nodes = gbx
+            .read_nodes(&gbx.body().unwrap())
+            .unwrap_or_else(|e| panic!("{file}: {e}"));
+        let map: &Challenge = nodes.main().try_into().unwrap();
+        let modules = &map.unlimiter.as_ref().unwrap().angel_script_modules;
+        let code: Vec<_> = modules.iter().filter_map(|m| m.byte_code.as_ref()).collect();
+        assert_eq!(code.len(), 1, "{file}: modules with code");
+        let body = std::fs::read(dump.join("decompressed").join(&file)).unwrap();
+        assert!(
+            body.windows(code[0].bytes.len()).any(|w| w == code[0].bytes),
+            "{file}: the module's bytes are not the body's"
+        );
+        assert!(!code[0].functions.is_empty(), "{file}");
+        if name == "13471994" {
+            let names = |d: &[gbx_formats::game::angelscript::Declared]| {
+                d.iter().map(|d| d.name.clone()).collect::<Vec<_>>()
+            };
+            assert_eq!(
+                names(&code[0].globals),
+                [
+                    "SnowTot",
+                    "jumpRequested",
+                    "jumpCooldown",
+                    "canAirJump",
+                    "GROUND_JUMP_STRENGTH",
+                    "AIR_JUMP_STRENGTH",
+                    "JUMP_COOLDOWN_TICKS",
+                    "TunnelEntry1"
+                ]
+            );
+            let functions: Vec<_> = code[0].functions.iter().map(|f| f.name.as_str()).collect();
+            assert_eq!(
+                functions,
+                ["isGrounded", "onTick", "onBindInputEvent", "onTriggerGroupEnter"]
+            );
+            assert!(!code[0].debug_info);
+        }
+    }
+    let bytes = std::fs::read(maps.join("13326247.Gbx")).unwrap();
+    let gbx = Gbx::parse(&bytes).unwrap();
+    let nodes = gbx.read_nodes(&gbx.body().unwrap()).unwrap();
+    let map: &Challenge = nodes.main().try_into().unwrap();
+    let sets = &map.unlimiter.as_ref().unwrap().parameter_sets;
+    let grip = sets.iter().find(|s| s.name == "Grip begone").unwrap();
+    let accel = grip.parameters.iter().find(|p| p.function == 124).unwrap();
+    assert_eq!(
+        (accel.operation, &accel.value),
+        (Operation::Set, &ParameterValue::Float(10.0))
+    );
 }

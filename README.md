@@ -12,7 +12,7 @@ is the GameBox reader behind [primase](https://github.com/Kalmarv/primase)'s Tra
 - Reads maps (`CGameCtnChallenge`): header chunks (description, medal times, name, XML, thumbnail) and body (blocks, skins, waypoints, checkpoints, laps, parameters, music, password)
 - Reads MediaTracker clips, tracks and blocks (cameras, text, images, sounds, fades, triangles, colour and blur effects)
 - Reads ghosts, including their sample stream and validation inputs
-- Reads TMUnlimiter's map chunks `0x3F001001` to `0x3F001003` (versions 1, 6 and 7, with embedded block models) and the encrypted `0x3F001000`
+- Reads TMUnlimiter's map chunks `0x3F001001` to `0x3F001003` (versions 1, 6 and 7, with embedded block models and AngelScript modules' saved bytecode) and the encrypted `0x3F001000`
 - Reads TMNF's pack files (NadeoPak version 3) with the keys from `packlist.dat`, decrypting each Gbx file as its nodes are read
 - Reads Stadium's block infos, block units, scene objects, decorations, moods and collections
 - Reads Plug classes: solids, trees, meshes, sprites, materials, bitmaps, shaders, lights and collision surfaces
