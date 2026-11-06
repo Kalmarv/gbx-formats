@@ -35,7 +35,7 @@ publish = true
 
 [workspace.dependencies]
 primase-foundations = "0.3.1"
-primase-testdata = { version = "0.1.6", git = "https://github.com/Kalmarv/primase-testdata", rev = "eb199df6f315faf37732ea648413ae044be2128f" }
+primase-testdata = "0.1.8"
 thiserror = { version = "=2.0.21", default-features = false, features = ["std"] }
 serde_json = { version = "=1.0.154", default-features = false, features = ["std", "preserve_order", "float_roundtrip"] }
 
